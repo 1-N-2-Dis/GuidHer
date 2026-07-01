@@ -28,7 +28,7 @@ until the loser is reconciled.
 | Security · auth/authz · secrets · compliance · privacy | [Security & Compliance](12-security-compliance.md) | 5 network surfaces incl. Firebase Storage (F-007); threats T1–T7 |
 | Evidence · research leads (`said/did/paid`, tiered) | [Evidence Register](evidence-register.md) | desk research + seed-pin hypotheses; not validation |
 | Significant decisions (the *why*) | [ADRs](adr/) | append-only; supersede, never edit. Map stack = ADR-0001 |
-| Routing cascade / report-wizard detail | `docs/superpowers/specs/*` | teammate-owned specs — **currently gitignored (see §3), links dangle until committed** |
+| Routing cascade / report-wizard / login-account detail | `docs/superpowers/specs/*` | teammate-owned specs — **not gitignored, just not yet committed (see §3), links dangle until committed** |
 
 **The rule:** a fact lives in its canonical doc; everything else links to it. Do not restate a
 fact owned elsewhere. Example: the map/routing stack is owned by **System Design** — the PRD,
@@ -58,14 +58,16 @@ Data Model, QA, and Security docs mention it in one line and link there. Change 
 - [ ] Every network-exposed surface declares auth/authz: Firestore (client writes denied, F-006),
       Firebase Auth, ORS key (restrict — open item), Gemini key (server-side), Firebase Storage (F-007).
 - [ ] Google-technology requirement satisfied (Firebase + Gemini) — do not remove both.
-- [ ] Open items tracked: ORS key unrestricted; freshness window (24h constant, revisit); auth
-      method undecided; photo bystander-privacy (T7); `docs/superpowers/` specs gitignored.
+- [ ] Open items tracked: ORS key unrestricted; freshness window (24h constant, revisit); photo
+      bystander-privacy (T7).
 
 ## 3. Known consistency gaps (flagged, not silently carried)
 
-- **Gitignored spec files:** `06-system-design.md`, the PRD, and `ADR-0001` link to
-  `docs/superpowers/specs/2026-07-01-*.md` (routing cascade, report wizard), but `docs/superpowers/`
-  is in `.gitignore` — so those links dangle in the repo. **Decision for the team:** un-ignore and
-  commit those specs (they own the routing/wizard detail), or stop linking to them from tracked docs.
+- **Untracked spec files (not actually gitignored):** `06-system-design.md`, the PRD, and
+  `ADR-0001` link to `docs/superpowers/specs/2026-07-01-*.md` (routing cascade, report wizard,
+  login/account page). `docs/superpowers/` is **not** in `.gitignore` (verified — no matching entry
+  in the root `.gitignore`); the earlier claim here was wrong. The specs are just uncommitted so
+  far. **Decision for the team:** commit those specs (they own the routing/wizard/login detail) so
+  the links resolve.
 - **`segments` is a static frontend module, not a Firestore collection** — the Data Model documents
   this drift explicitly (see its ERD note); reconcile the schema framing post-July-2.

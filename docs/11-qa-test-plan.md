@@ -283,6 +283,33 @@ TC-016 (offline), TC-019 (red-segment-unavoidable), TC-022 (AI rejects spam/fals
   (e.g. `application/pdf`), (d) under a different user's `reports/{otherUid}/` prefix.
 - **Expected:** All four rejected by Storage Security Rules.
 
+### TC-028 — Email/password signup + login round-trip, uid preserved through linking
+- **Covers:** F-009
+- **Preconditions:** Anonymous session active (default on load).
+- **Steps:** On `/login`, sign up with `notgmail@example.com` (expect rejection — not `@gmail.com`);
+  sign up with `demo@gmail.com` + a 6+ char password (expect success, `uid` unchanged from the
+  anonymous session); sign out; log back in with the same credentials.
+- **Expected:** Non-`@gmail.com` address rejected client-side with no Firebase call made; valid
+  signup succeeds and preserves `uid`; sign-out then login re-authenticates the same account.
+
+### TC-029 — Admin can moderate; a plain user cannot
+- **Covers:** F-009, Security
+- **Preconditions:** `backend/scripts/seed-auth-users.mjs` run against the emulator (1 admin, 2
+  users); at least one report exists.
+- **Steps:** Log in as `admin@gmail.com`, visit `/admin`, delete a report; log in as `user1@gmail.com`,
+  visit `/admin`; attempt a direct `deleteDoc` call against `reports/{id}` as `user1`.
+- **Expected:** Admin sees the report list and delete succeeds. `user1` sees "you need an admin
+  account" (no report list rendered) and a direct delete attempt is rejected by
+  `backend/firestore.rules`' `isAdmin()` check.
+
+### TC-030 — Heatmap reflects only validated (yellow/red) reports
+- **Covers:** F-010
+- **Preconditions:** At least one green-severity report and one yellow/red-severity report exist
+  within the freshness window.
+- **Steps:** Toggle "Show incident heatmap" on the zone map.
+- **Expected:** Heatmap density appears only near segments with yellow/red reports; a segment with
+  only a green report contributes no heatmap density; toggling off removes the layer.
+
 ## Acceptance criteria
 
 Pulled verbatim-in-intent from PRD: F-001 (map + seeded flags, tap shows type+timestamp), F-002
@@ -291,7 +318,10 @@ okay vs flagged tonight), F-004 (single dedup summary, no added facts), F-005 (1
 route alternatives, red avoided unless unreachable), F-006 (exactly one of
 created/duplicate/rejected, never an unmoderated write), F-007 (photo marker + popup, EXIF
 stripped), F-008 (`assessRoute` returns a grounded verdict, or "looks okay" with no Gemini call
-when nothing is active). A feature passes when its mapped TCs pass.
+when nothing is active), F-009 (email/password or Google sign-in upgrades an anonymous session
+without losing its `uid`; an `admin`-role account can view and delete any report, a `user`-role
+account cannot). A feature passes when its mapped TCs pass. F-009 is a post-elimination add-on, not
+part of the July-2 demo-critical set below.
 
 ## Regression plan
 

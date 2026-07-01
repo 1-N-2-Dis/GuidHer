@@ -75,6 +75,7 @@ Secondary rider (trans woman): same stories; same zone and conditions.
 | F-006 | AI report classification + moderation | P0 | "Not every report is equally urgent, and crowd noise/false reports need filtering before they reach the map" | `backend/functions/index.js` `submitReport`; Gemini classifies severity, flags duplicates for corroboration-merge, rejects spam; report writes move server-side (see BR-005 amendment) |
 | F-007 | Photo evidence on reports | P0 | "A text-only report is harder to trust/act on than one with visual evidence" | Firebase Storage, EXIF-stripped client-side; see BR-008 |
 | F-008 | AI-assessed "is my route safe tonight?" for the recommended route | P0 | "The pre-trip check was disconnected from the actual route being taken, and a raw flag list isn't the same as an answer" | **Revised (2026-07-01, later same day):** the earlier rule-based, always-on `RouteSafetyPanel.jsx` is removed. `RouteCheck.jsx` (F-003) now covers both: user taps "Is my route okay tonight?", then explicitly asks; `backend/functions/index.js` `assessRoute` reads each nearby segment's real Firestore report and returns a Gemini-written safety verdict, constrained the same way F-006 is (no invented facts, no crime-labels, no rescue/dispatch promise). |
+| F-010 | Community heatmap layer of validated (yellow/red severity) reports | P1 | "A raw list of pins doesn't show where risk clusters at a glance" | Client-side only, `frontend/src/features/map/ReportHeatmap.jsx`; MapLibre native `type: heatmap` layer over a GeoJSON source built from Firestore reports joined to segment `geo`; "validated" = `severity in {yellow, red}` (AI-assigned, F-006) — no new field, no backend change |
 
 ## Business rules
 
@@ -88,7 +89,8 @@ Secondary rider (trans woman): same stories; same zone and conditions.
 - **BR-004** — A segment flag must carry a condition type and a timestamp so "tonight" /
   freshness can be computed for the pre-trip check (F-003 depends on this).
 - **BR-005** — Report submission requires an authenticated user (Firebase Auth) to enable
-  basic abuse control. Auth method `[unverified]` — choose lightweight (e.g., anonymous/Google sign-in) for the hackathon.
+  basic abuse control. Auth method: anonymous by default, with an optional Google sign-in upgrade
+  via account linking (implemented — `frontend/src/features/auth/AccountPage.jsx`, `/login`).
   **Amended (F-006):** writes now happen exclusively via the `submitReport` Cloud Function (Admin
   SDK), not a direct client write — `backend/firestore.rules` denies client `create` on `reports`
   outright. `request.auth` is still required (enforced in the callable), preserving BR-005's
@@ -166,6 +168,16 @@ UJ-004 (multi-route recommendation + AI route check, F-005/F-003/F-008):
 - **F-008:** `assessRoute` reads each on-route segment's real, current Firestore report (never
   trusts client-supplied report content) and only calls Gemini when at least one active report
   exists along the route.
+- **F-009** (added post-elimination, per user request — hackathon-speed, not final): a user can
+  sign up / log in with email + a `@gmail.com`-suffixed address (client-side suffix check only,
+  no real verification — flagged `[unverified]`/demo-only) or upgrade an anonymous session via
+  Google sign-in; an account carrying `role: admin` (set only out-of-band via
+  `backend/scripts/seed-auth-users.mjs`, never client-assignable) can view all reports at `/admin`
+  and delete any of them (remove-only moderation, no edit).
+- **F-010:** Given at least one report with `severity` yellow or red within the freshness window,
+  toggling "Show incident heatmap" renders a density layer weighted toward red/high-corroboration
+  reports; toggling off removes it; green-severity reports never contribute (BR-007 preserved —
+  no new place/neighborhood classification is introduced by aggregation).
 
 ## Non-goals
 
@@ -191,6 +203,5 @@ UJ-004 (multi-route recommendation + AI route check, F-005/F-003/F-008):
   it useful? (idea §9 single riskiest assumption — unvalidated, resolve via interviews post-July 2.) `[unverified]`
 - Does "danger" stay harassment-led (women wedge) or widen to all-crime/all-commuters? Do not
   resolve from desk research; decide post-July 2 (idea §7 open decision). `[unverified]`
-- Which Firebase auth method for the hackathon (anonymous vs. Google sign-in)? `[unverified]`
 - Are the 8 seed pins real and current? All flagged `[unverified]` in idea §7 — confirm in field-walks. `[unverified]`
 - How is "tonight" / freshness windowed for F-003 (e.g., decay of stale flags)? Not specified in idea. `[unverified]`

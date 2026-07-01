@@ -69,7 +69,9 @@ reports (collection)
 ```
 
 Relationship: **`segments` 1 — N `reports`**, joined on `reports.segmentId == segments.{segmentId}`.
-No `users` collection in MVP — identity lives in Firebase Auth; `uid` is stored on the report only.
+Identity for reports still lives in Firebase Auth (`uid` on the report only) — but **F-009** adds a
+minimal `users/{uid}` collection solely to carry a `role` flag (`user`/`admin`) for the admin
+moderation feature; it is not a general user-profile store.
 
 ## Schema / field definitions
 
@@ -108,6 +110,24 @@ F-004 (notes → Gemini).
 > **No** `crimeType`, `neighborhoodRating`, `dangerLabel`, or any crime/neighborhood-classification field
 > anywhere (BR-001). The enum is the only condition vocabulary. `severity` is a distinct,
 > per-report triage field, not a variant of this prohibition (BR-007).
+
+> **F-010 note:** there is no stored `validated` field. "Condition validated" for the community
+> heatmap is a derived, client-side-only concept: `severity in {yellow, red}`. This reuses
+> BR-007's existing per-report `severity` semantics and introduces no new schema, field, or
+> Firestore index.
+
+### user (`users/{uid}`, F-009)
+
+Role record only — not a profile store. Self-created on first email/password or Google sign-in
+(`frontend/src/lib/users.js`), always as `role: 'user'`; `role: 'admin'` is assignable only
+out-of-band via `backend/scripts/seed-auth-users.mjs`'s Admin SDK write, which bypasses
+`backend/firestore.rules` (client `create` is rejected unless `role == 'user'`).
+
+| Field | Type | Null? | Default | Description |
+|-------|------|-------|---------|-------------|
+| `uid` | string (doc ID) | No | — | Firebase Auth UID; also the document ID. |
+| `email` | string | No | — | The account's email (Google or email/password). |
+| `role` | string (**closed enum**) | No | `'user'` | One of `{user, admin}`. `admin` grants read of all `users` docs and delete on any `reports` doc (moderation) — see `backend/firestore.rules` `isAdmin()`. |
 
 ### Storage objects (`reports/{uid}/{timestamp}-{filename}`, F-007)
 
@@ -204,13 +224,21 @@ match /segments/{id} {
   allow write: if false;            // seeded out-of-band
 }
 ```
-> Auth **method** (anonymous vs. Google sign-in) is `[unverified]` per system design; either yields a
-> `request.auth.uid` that `submitReport` relies on.
+> Auth **method**: anonymous by default, with an optional Google sign-in upgrade via account
+> linking (`/login`) that preserves the `uid`; either state yields a `request.auth.uid` that
+> `submitReport` relies on.
 
 **Do not deploy this rule change until `submitReport` is fully verified against the emulator** —
 see `docs/superpowers/specs/2026-07-01-severity-tiered-ai-routing-design.md` §Testing approach.
 Until then, keep the previous direct-write rules (closed enum + field allowlist + UID ownership,
-as before) so F-002 has a working fallback.
+as before) so F-002 has a working fallback. **This is the actual state of `backend/firestore.rules`
+today** — the deny-all sketch above is the target end-state, not what's deployed.
+
+**F-009 addition (already in `backend/firestore.rules`, independent of the migration above):**
+`allow delete: if isAdmin()` on `reports` (moderation stays remove-only — `update` is still
+`false`), plus a `users/{uid}` match block: read is self-or-admin, create only as `role: 'user'`
+(privilege escalation blocked — `admin` is Admin-SDK-only via the seed script), update/delete
+always `false`.
 
 ## Freshness / "tonight" window — `[unverified]`
 

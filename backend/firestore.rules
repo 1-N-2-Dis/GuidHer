@@ -8,7 +8,16 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // reports — public read; authed, schema-validated, immutable create.
+    // F-009: role lookup for the isAdmin() check below. get()/exists() reads inside rules do not
+    // themselves recurse through rules, so this is safe to call from other match blocks.
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // reports — public read; authed, schema-validated, immutable create. Admins may delete
+    // (F-009 moderation) but never edit report content — moderation is remove-only.
     match /reports/{id} {
       allow read: if true;
 
@@ -22,13 +31,30 @@ service cloud.firestore {
              ['segmentId', 'conditionType', 'createdAt', 'uid', 'note'])       // BR-001 closed field allowlist
         && (!('note' in request.resource.data) || request.resource.data.note is string);
 
-      allow update, delete: if false;                                          // reports are immutable
+      allow update: if false;                                                  // reports are immutable
+      allow delete: if isAdmin();                                              // F-009 moderation
     }
 
     // segments — public read; clients never write (seeded out-of-band by the admin script).
     match /segments/{id} {
       allow read: if true;
       allow write: if false;
+    }
+
+    // users — role record for F-009 (email/password signup + admin moderation). A signed-in
+    // user may read their own doc or (if admin) any doc; may only ever self-create as 'role: user'
+    // (privilege escalation is blocked — 'admin' is assignable only out-of-band, via
+    // backend/scripts/seed-auth-users.mjs's Admin SDK write, which bypasses these rules).
+    match /users/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.role == 'user'
+        && request.resource.data.email is string
+        && request.resource.data.keys().hasOnly(['email', 'role']);
+
+      allow update, delete: if false;
     }
   }
 }

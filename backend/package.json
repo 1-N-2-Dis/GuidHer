@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "seed": "node scripts/seed-segments.mjs"
+    "seed": "node scripts/seed-segments.mjs",
+    "seed:users": "node scripts/seed-auth-users.mjs"
   },
   "dependencies": {
     "firebase-admin": "^13.0.1"
