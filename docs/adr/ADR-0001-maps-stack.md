@@ -28,7 +28,8 @@
   for routing. Keep the Google-technology requirement satisfied via **Firebase + Gemini**, not
   maps. Detailed routing behavior (safety-scored, highway-aware, 2-call cap, green/orange
   labelling) is specified in
-  `docs/superpowers/specs/2026-07-01-highway-aware-routing-design.md`.
+  `docs/superpowers/specs/2026-07-01-severity-tiered-ai-routing-design.md` (the current routing
+  spec; it supersedes the earlier `2026-07-01-highway-aware-routing-design.md` single-route cascade).
 - **Consequences:**
   - No map billing account or render key to manage — the render surface is keyless (a security
     win, one fewer attack surface).
