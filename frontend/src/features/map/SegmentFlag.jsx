@@ -20,7 +20,7 @@ function formatTimestamp(createdAt) {
 }
 
 export default function SegmentFlag({
-  segment, report, status, isOpen, onSelect, showGreenDots = true, keepVisibleOnRoute = false,
+  segment, report, status, isOpen, onSelect, isOnRoute = false,
 }) {
   const flagged = status === 'flagged_tonight';
   const meta = report ? CONDITION_META[report.conditionType] : null;
@@ -44,13 +44,14 @@ export default function SegmentFlag({
     return () => { cancelled = true; };
   }, [showPopup, report?.photoPath]);
 
-  // Hide low-concern (green) markers when the user has toggled them off — on request, since
-  // well-used/no-report segments can otherwise clutter the map. Yellow/red markers (actual
-  // reported conditions) are never hidden by this toggle. `keepVisibleOnRoute` (computed by
-  // ZoneMap.jsx from the current route's path) overrides the hide so a street the route
-  // actually passes through stays visible even with the general toggle off. Placed after all
-  // hooks above so hook call order stays constant across renders (Rules of Hooks).
-  if (severity === 'green' && !showGreenDots && !keepVisibleOnRoute) return null;
+  // Low-concern (green severity / no-report) markers only render when the segment sits on the
+  // currently selected route (`isOnRoute`, computed by ZoneMap.jsx from the route's path via
+  // nearestDistanceToRoute) — on request, so a purple circle only ever appears if the user's
+  // path actually has to step foot on that road. With no route selected, `isOnRoute` is always
+  // false, so no low-concern markers render at all. Yellow/red markers (actual reported
+  // conditions) are never hidden by this rule. Placed after all hooks above so hook call order
+  // stays constant across renders (Rules of Hooks).
+  if (severity === 'green' && !isOnRoute) return null;
 
   return (
     <>

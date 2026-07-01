@@ -49,10 +49,23 @@ a silent unauthenticated surface is a factory-gate failure.
    - Without deployed rules, **reads would be unrestricted too** — rules remain mandatory, a
      pre-demo gate (see checklist). **Do not deploy the new deny-create rule until `submitReport`
      is fully verified** (see `docs/superpowers/specs/2026-07-01-severity-tiered-ai-routing-design.md`).
-2. **Firebase Auth** — the identity surface. **Method `[unverified]`**: anonymous (chosen for demo speed)
-   vs. Google sign-in. Anonymous yields a `uid` but gives **weak abuse control** (a user can drop the
-   anonymous identity and get a fresh `uid` at will) — documented limitation feeding Threats T3/T4,
-   unchanged by F-006 (the Function still trusts whatever `request.auth.uid` Auth provides).
+2. **Firebase Auth** — the identity surface. Anonymous sign-in by default (demo speed), with an
+   optional upgrade via Google sign-in (`linkWithPopup`) **or email/password** (`linkWithCredential`)
+   at `/login` (`frontend/src/lib/auth.js`), either of which preserves the existing `uid`. While
+   still anonymous, a user can drop the identity and get a fresh `uid` at will — **weak abuse
+   control**, documented limitation feeding Threats T3/T4, unchanged by F-006 (the Function still
+   trusts whatever `request.auth.uid` Auth provides). Once linked, the `uid` is stable and no
+   longer droppable this way.
+   - **F-009 email/password caveat:** the only email validation is a client-side `@gmail.com`
+     suffix check (`isGmailAddress`, `frontend/src/lib/auth.js`) — **not** real address
+     verification. This is explicitly demo-only, per user request; do not treat it as proof of
+     address ownership. Firebase's own password rules apply (≥6 chars).
+2b. **`users/{uid}` role (F-009)** — a second, minimal authz surface layered on Firestore. Read:
+   self or admin. Create: self-only, and only as `role: 'user'` — `backend/firestore.rules`
+   rejects any client attempt to self-assign `role: 'admin'`. `admin` is set only via
+   `backend/scripts/seed-auth-users.mjs`, an Admin-SDK script that bypasses Rules by design (same
+   posture as `submitReport`). An `admin` role grants `reports` **delete** (moderation, remove-only
+   — no update) via the `isAdmin()` rule helper.
 3. **Google Maps JS API key** — N/A for this build (superseded by ORS + OpenFreeMap keyless tiles).
    The ORS key ships in the client bundle by the same necessity and is **not yet referrer-restricted**
    — open item, same Threat T2 shape.
@@ -205,8 +218,13 @@ Hard gates — a world-writable Firestore or an unrestricted key is a demo-day l
   fallback is ever used, it is a *knowingly-throwaway* demo key, flagged aloud. (Kills T2.)
 - [ ] **No secrets in the repo** — scan committed files; no Gemini key, no service-account JSON. Firebase
   client config is fine; rules are the gate. (Public repo.)
-- [ ] **Auth method decided + wired** — anonymous (default) or Google sign-in; if anonymous, the **weak
-  abuse-control limitation is stated in the demo/readme** (T3). `[unverified]` until chosen.
+- [x] **Auth method decided + wired** — anonymous (default), with an optional Google or
+  email/password sign-in upgrade via account linking (`/login`); while still anonymous, the **weak
+  abuse-control limitation is stated in the demo/readme** (T3).
+- [ ] **F-009 demo credentials never reused for a real account** — `backend/scripts/seed-auth-users.mjs`
+  creates 3 demo accounts with a shared, hardcoded password (`Passw0rd!`) purely for local
+  try-it-out use against the emulator. Do not run it against a real project without changing the
+  password, and never commit real credentials that reuse it.
 - [ ] **Closed enum verified end-to-end** — UI offers only the 3 conditions; no free-text crime label exists
   anywhere; `submitReport` rejects any conditionType outside the enum (BR-001). (Defamation/profiling mitigation — idea §9.)
 - [ ] **EXIF stripped from uploaded report photos** — spot-check an uploaded photo (exiftool or an online
@@ -218,7 +236,6 @@ Hard gates — a world-writable Firestore or an unrestricted key is a demo-day l
 
 ## Open items / `[unverified]` flags (carried for post-July-2)
 
-- Auth method (anonymous vs. Google sign-in) — affects abuse control (T3).
 - Freshness-window length — affects false-flag decay (T4) and "tonight" logic (BR-004).
 - No rate-limiting / App Check on writes (T3); no reputation/verification layer (T4) — MVP gaps.
 - `note` PII redaction policy; data **retention/deletion** policy; whether `uid` is stripped from open

@@ -64,6 +64,7 @@ upload, auth-gated), `Web App → ORS` (multi-route, severity-tiered).
 | **Cloud Firestore** | Store + serve segment reports with type + timestamp (BR-004); serve seed pins | Report documents, segment metadata | Written only by `submitReport` (Admin SDK) as of F-006 — see Security Rules |
 | **Firestore Security Rules** | Authz gate: reads open; `reports` writes now denied entirely for clients (F-006) — enforcement moved to `submitReport`'s code | Access policy | Auth |
 | **MapLibre GL + OpenFreeMap** | Map tiles, segment overlays (F-001) | Map render + geometry | None — OpenFreeMap is keyless |
+| **Report heatmap layer (F-010)** | Client-side density visualization of validated (yellow/red severity) reports | Rendering only — no data ownership | Cloud Firestore (`reports`, already-subscribed), segment `geo` (seed data), MapLibre native heatmap layer type |
 | **OpenRouteService (ORS)** | Severity-tiered, multi-route (2-3 alternatives) point-to-point routing (F-005) — red hard-avoid, yellow soft-avoid, green informational only | Route geometry | API key (ships in client bundle; not yet referrer-restricted — open item, see Security must-dos in `AGENTS.md`) |
 | **Gemini API — `summarizeSegment`** | Dedup + structure free-text reports into a summary; adds no facts (BR-006) | Summary text only | Report data from Firestore |
 | **Gemini API — `submitReport`** | **Critical path (F-006), not P1.** Classifies report severity, detects duplicates for corroboration-merge, rejects spam — blocking, fail-closed | The only path that writes a `reports` doc | Report submission data, recent reports on the segment |
@@ -103,7 +104,9 @@ single-route cascade):**
    same bottom-center overlay, also collapsed to a toggle button by default. `HomePage.jsx`'s
    side-pane (and its static tagline copy) is removed entirely — `ZoneMap.jsx` is the only
    content on the page, and owns both the bottom-center overlay (`RouteCheck` + `RiskSummary`)
-   and the marker-visibility toggles.
+   and on-route marker visibility for low-concern reports (a purple/"green-severity" marker
+   renders only when its segment sits within `YELLOW_AVOID_RADIUS_M` of the currently selected
+   route — see `nearestDistanceToRoute`; with no route selected, none render).
 
 **UJ-002 — Report + AI review (F-002/F-006/F-007, supersedes the original direct-write flow):**
 1. User authenticates (BR-005); anonymous or Google sign-in.
@@ -133,6 +136,7 @@ single-route cascade):**
 - **report**: `{ reportId, segmentId, conditionType (enum: poor_lighting | no_crowd | recent_incident), severity (enum: green | yellow | red, AI-assigned — F-006), corroborationCount, createdAt, lastActivityAt (timestamps), uid, note? (optional free text), photoPath? (optional Storage path — F-007) }`.
 - Derived: a segment's "tonight" status = newest report (by `lastActivityAt || createdAt`) within the freshness window. **Freshness window value is `[unverified]`** — not specified in idea/PRD; a 24h constant is in place (`frontend/src/lib/freshness.js`), open for revisit.
 - **Hard rule:** no field for neighborhood/crime classification anywhere in the schema (BR-001). Enum is closed; enforced in `submitReport`'s code (moved out of Security Rules as of F-006 — see `docs/09-data-model.md`). `severity` is a distinct, per-report triage field, not a variant of this prohibition (BR-007).
+- **F-010 heatmap (client-side only, no schema/backend change):** `frontend/src/lib/heatmap.js` joins each report with `severity in {yellow, red}` to its segment's `geo`, builds a GeoJSON `FeatureCollection`, and renders it via a MapLibre `type: heatmap` style layer (`ReportHeatmap.jsx`). Reuses the existing 24h freshness window (`freshness.js`) so the heatmap reflects current, not historical, conditions. No new Firestore query, index, or Cloud Function — it's a client-side reduction over the already-subscribed `reports` array.
 
 ## Key technology choices + rationale
 
@@ -141,7 +145,7 @@ single-route cascade):**
 | **React + Vite web app** | Fastest path to a demoable, public-repo, deployable artifact in 2 days; huge ecosystem for Maps/Firebase | Not a native mobile app (the real product is mobile-first) — acceptable for a demo | Flutter / React Native (longer setup, device/emulator friction in a hackathon) |
 | **Firebase Hosting** | One-command deploy, HTTPS, integrates with Auth/Firestore | Vendor lock-in to Google — fine, and satisfies Google-tech requirement | Vercel/Netlify (adds a second vendor; loses tight Firebase coupling) |
 | **Cloud Firestore** | Realtime reads make flags update live with zero polling code; serverless = no backend to stand up | Query/aggregation limits; cost at scale unmodeled (`[unverified]`) | A custom Node/Express + DB backend (too much to build + host in 2 days) |
-| **Firebase Auth (anonymous or Google sign-in)** | Lightweight; satisfies BR-005 abuse-control gate with near-zero UI | Anonymous gives weak abuse control (no real accountability); Google sign-in adds friction. Method `[unverified]` — pick anonymous for demo speed, note the weakness | Full email/password (more UI, more time) |
+| **Firebase Auth (anonymous by default, optional Google sign-in via account linking)** | Lightweight; satisfies BR-005 abuse-control gate with near-zero UI | Anonymous-only gives weak abuse control (no real accountability) until a user upgrades; Google sign-in adds friction but is opt-in via `/login`, not required | Full email/password (more UI, more time) |
 | **MapLibre GL + OpenFreeMap (keyless) rendering; OpenRouteService (ORS) routing** | Keyless vector-tile map render + overlays for F-001/F-003; ORS foot-walking directions for F-005 | No render key required; ORS route-vs-segment matching is non-trivial | Google Maps Platform (needs billing + restricted key; no Google-tech credit needed here — Firebase + Gemini already satisfy it) |
 | **Gemini API via Cloud Function** | Was an innovation hook for F-004 (P1); **now also the F-006 moderation gate (P0, critical path)** — function keeps the API key server-side for both | Adds a deploy unit + latency on every report submission (blocking UX — accepted tradeoff, see design doc); client-side call is faster to build but **leaks the key** | Client-side Gemini call (rejected for prod due to key exposure; acceptable ONLY as a throwaway demo fallback — flagged below) |
 | **Firebase Storage for photo evidence (F-007)** | Ships with the already-installed `firebase` SDK; same project, same auth model as Firestore | New privacy surface (bystander faces, incidental metadata) beyond what was threat-modeled pre-F-007 — mitigated only partially (EXIF stripped; face privacy not mitigated, see security-compliance Threat T7) | Third-party image host (adds a vendor, loses the unified Firebase auth/rules model) |
@@ -161,7 +165,7 @@ single-route cascade):**
 > This is a factory gate — stated explicitly for each surface.
 
 1. **Cloud Firestore (read/write reports)** — Reads: open (flags are public safety info; no PII beyond uid). **Writes: denied for all clients (F-006)** — `allow create, update, delete: if false`. The only writer is `submitReport`, via the Admin SDK, which bypasses Rules entirely; that Function's own auth check (`request.auth != null`, BR-005) and validation code (closed enum, BR-001) are now the real gate, not Rules. Without rules at all, Firestore would still be write-blocked for clients (the `false` lines are explicit, not merely a default) but reads would need their own gate — rules remain mandatory.
-2. **Firebase Auth** — the identity surface itself. Anonymous or Google sign-in. **`[unverified]`** which method; anonymous chosen for demo speed but gives weak abuse control — documented limitation, unchanged by F-006 (the Function still trusts whatever `request.auth.uid` Firebase Auth hands it).
+2. **Firebase Auth** — the identity surface itself. Anonymous by default (demo speed), with an optional Google sign-in upgrade via account linking (`/login`) that preserves the `uid`. While still anonymous, weak abuse control is a documented limitation, unchanged by F-006 (the Function still trusts whatever `request.auth.uid` Firebase Auth hands it).
 3. **Map key surface** — **Rendering (MapLibre GL + OpenFreeMap): no key at all** — OpenFreeMap tiles are keyless, so there is nothing to restrict or leak. **Routing (OpenRouteService): a client-side key** ships in the browser bundle and is **not yet origin-restricted** — the open security item is to restrict it by HTTP referrer/origin and cap request volume in the ORS dashboard.
 4. **Gemini API key** — **must NOT ship in the client.** Held in a Cloud Function (server-side); invoked by the authenticated client for both `summarizeSegment` and, as of F-006, `submitReport` — the latter is now P0/critical-path, not a P1 stretch. Client-side Gemini calls expose the key and are only acceptable as a knowingly-throwaway demo fallback — flagged as a security tradeoff, not for any real deployment.
 5. **Firebase Storage (report photos, F-007)** — **Authz via Storage Security Rules** (`backend/storage.rules`). Reads: open (same public-safety-info posture as reports). Writes: require `request.auth != null`, path-scoped to the caller's own `reports/{uid}/` prefix, `<5MB`, `image/(jpeg|png)` only. Without rules, Storage is world-writable — same mandatory-gate posture as Firestore Rules.
@@ -187,14 +191,17 @@ N/A for the hackathon beyond defaults — **because** this is a single-zone (BR-
 
 - **Web vs. native mobile** — chose web for demo speed; the real product is a phone-in-hand commute tool, so this is a demo-only compromise. → Proposed ADR.
 - **Gemini key: Cloud Function vs. client-side** — chose server-side function for key safety. **Updated (F-006):** this is no longer a P1-cut-safe risk — `submitReport` is now P0/critical-path, so the Function's uptime/latency directly gates F-002. → Proposed ADR.
-- **Anonymous vs. Google auth** — leaning anonymous for speed, accepting weak abuse control. `[unverified]` decision. → Proposed ADR.
+- **Anonymous vs. Google auth** — decided: anonymous by default for speed (accepting weak abuse
+  control until upgraded), with an optional Google sign-in upgrade via account linking so the uid
+  persists. → Proposed ADR.
 - **Single-environment deploy** — accepted no staging for a 2-day build; not safe beyond demo.
 - **Report creation: client-direct-write vs. server-only-via-callable (F-006)** — **decided: server-only.** Firestore Rules can only inspect a write's shape, not whether it passed AI review, so client-direct-write + Rules-as-gate cannot enforce moderation (a client could always skip the review call). Moving creation into `submitReport` (Admin SDK, bypasses Rules) makes the Function the single, auditable enforcement point, at the cost of Rules no longer validating `reports` shape on create and a new single-point-of-failure surface (a bug in the Function's validation is no longer backstopped by Rules). → Proposed ADR.
 
 ### Proposed ADRs
 - ADR: Web app (React + Vite) over native mobile for the hackathon MVP.
 - ADR: Gemini API key held server-side in a Cloud Function (not client-side) — **now backing a P0 critical path (`submitReport`), not just the P1 `summarizeSegment`.**
-- ADR: Firebase Auth method — anonymous vs. Google sign-in (decision pending, `[unverified]`).
+- ADR: Firebase Auth method — anonymous by default, optional Google sign-in via account linking
+  (decided, implemented at `/login`).
 - ADR: Report writes moved server-side (`submitReport` via Admin SDK); `backend/firestore.rules` denies all client `create`/`update`/`delete` on `reports`.
 
 ## 2-day build sequence

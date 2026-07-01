@@ -8,6 +8,8 @@ import { subscribeReports, latestBySegment } from './lib/reports.js';
 import AppHeader from './components/AppHeader.jsx';
 import HomePage from './pages/HomePage.jsx';
 import ReportPage from './pages/ReportPage.jsx';
+import AccountPage from './pages/AccountPage.jsx';
+import AdminPage from './pages/AdminPage.jsx';
 
 export default function App() {
   const segments = [...SEED_SEGMENTS, ...WELL_USED_SEGMENTS];
@@ -47,6 +49,8 @@ export default function App() {
               />
             }
           />
+          <Route path="/login" element={<AccountPage />} />
+          <Route path="/admin" element={<AdminPage reports={reports} segments={segments} />} />
         </Routes>
       </main>
 

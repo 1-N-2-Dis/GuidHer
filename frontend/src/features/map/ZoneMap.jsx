@@ -15,6 +15,7 @@ import SegmentFlag from './SegmentFlag.jsx';
 import MockLocation from './MockLocation.jsx';
 import DestinationMarker from './DestinationMarker.jsx';
 import RouteLayer from './RouteLayer.jsx';
+import ReportHeatmap from './ReportHeatmap.jsx';
 import RouteCheck from '../route-check/RouteCheck.jsx';
 import RiskSummary from '../risk-summary/RiskSummary.jsx';
 
@@ -37,13 +38,7 @@ export default function ZoneMap({ segments, latest, reports, selectedId, onSelec
   const [routeError, setRouteError] = useState(null);
   const [routes, setRoutes] = useState([]); // Array<{ coords, status, tier }>, safest first
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
-  // Low-concern (green severity / no-report) markers can be toggled off to declutter the map —
-  // on request. Yellow/red markers (actual reported conditions) always stay visible.
-  const [showGreenDots, setShowGreenDots] = useState(true);
-  // Even with the above off, optionally keep showing whichever low-concern markers the current
-  // route actually passes through — on request, so hiding clutter doesn't hide context relevant
-  // to the path you're about to take.
-  const [showRouteMarkers, setShowRouteMarkers] = useState(true);
+  const [showHeatmap, setShowHeatmap] = useState(false);
 
   // Reports flagged tonight, with their AI severity — passed to RouteLayer as avoid zones.
   // Missing severity (reports written before AI classification shipped) defaults to 'red',
@@ -61,10 +56,10 @@ export default function ZoneMap({ segments, latest, reports, selectedId, onSelec
 
   const selectedRouteCoords = routes[selectedRouteIndex]?.coords || null;
 
-  // Segments that sit near the currently selected route — shared by the marker-visibility
-  // toggle (which just needs the IDs) and RouteCheck's AI assessment (which also needs the
-  // display name, since segments aren't a Firestore collection the backend can look up itself —
-  // see docs/09-data-model.md).
+  // Segments that sit near the currently selected route — shared by low-concern marker
+  // visibility (which just needs the IDs; see SegmentFlag.jsx) and RouteCheck's AI assessment
+  // (which also needs the display name, since segments aren't a Firestore collection the backend
+  // can look up itself — see docs/09-data-model.md).
   const onRouteSegments = useMemo(() => {
     if (!selectedRouteCoords) return [];
     return segments.filter(
@@ -125,6 +120,8 @@ export default function ZoneMap({ segments, latest, reports, selectedId, onSelec
           />
         )}
 
+        <ReportHeatmap reports={reports} segments={segments} visible={showHeatmap} />
+
         {segments.map((seg) => {
           const report = latest.get(seg.segmentId);
           const status = segmentStatus(report);
@@ -136,30 +133,19 @@ export default function ZoneMap({ segments, latest, reports, selectedId, onSelec
               status={status}
               isOpen={selectedId === seg.segmentId}
               onSelect={onSelect}
-              showGreenDots={showGreenDots}
-              keepVisibleOnRoute={showRouteMarkers && onRouteSegmentIds.has(seg.segmentId)}
+              isOnRoute={onRouteSegmentIds.has(seg.segmentId)}
             />
           );
         })}
       </Map>
 
       <div className="map-controls">
-        <label className="map-ctrl-toggle">
-          <input
-            type="checkbox"
-            checked={showGreenDots}
-            onChange={(e) => setShowGreenDots(e.target.checked)}
-          />
-          Show low-concern markers
-        </label>
-        <label className="map-ctrl-toggle">
-          <input
-            type="checkbox"
-            checked={showRouteMarkers}
-            onChange={(e) => setShowRouteMarkers(e.target.checked)}
-          />
-          Always show markers on my route
-        </label>
+        <button
+          className={`map-ctrl-btn${showHeatmap ? ' map-ctrl-btn--active' : ''}`}
+          onClick={() => setShowHeatmap((v) => !v)}
+        >
+          {showHeatmap ? 'Hide' : 'Show'} incident heatmap
+        </button>
         {!locationB && !settingB && (
           <button className="map-ctrl-btn" onClick={() => setSettingB(true)}>
             + Set destination
