@@ -138,6 +138,18 @@ already do by hand.
   "no way to know before setting out" (§1).
 - **F-004** — Structured, deduplicated risk summary from free-text reports —
   solves "crowd noise isn't trustworthy signal" (§5 alternatives gap).
+- **F-005** — Severity-tiered, multi-route (2-3 alternative) recommendation —
+  solves "one route recommendation hides the safety-vs-directness tradeoff"
+  (added during build, 2026-07-01).
+- **F-006** — AI report classification + moderation (server-side) — solves
+  "crowd noise and false reports need filtering before they reach the map"
+  (added during build, 2026-07-01).
+- **F-007** — Photo evidence on reports (Firebase Storage, EXIF-stripped) —
+  solves "a text-only report is harder to trust and act on" (added during
+  build, 2026-07-01).
+- **F-008** — AI-assessed "is my route safe tonight?" for the recommended route
+  — solves "the pre-trip check was disconnected from the actual route being
+  taken" (added during build, 2026-07-01).
 
 **Final**:
 - **F-101** — Expansion to additional campus commute zones with enough
