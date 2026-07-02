@@ -214,9 +214,9 @@ GitHub Link: https://github.com/1-N-2-Dis/GuidHer/
 
 ---
 
-## Demo
+## Video Pitch
 
-[View Live Demo](#)
+[View Video Pitch Here](https://youtu.be/owj2gd-km5s)
 
 ---
 
