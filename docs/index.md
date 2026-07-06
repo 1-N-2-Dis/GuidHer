@@ -35,6 +35,11 @@ until the loser is reconciled.
 | Security · auth/authz · secrets · compliance · privacy | [Security & Compliance](12-security-compliance.md) | 5 network surfaces incl. Firebase Storage (F-007); threats T1–T7 |
 | Evidence · research leads (`said/did/paid`, tiered) | [Evidence Register](evidence-register.md) | desk research + seed-pin hypotheses; not validation |
 | Significant decisions (the *why*) | [ADRs](adr/) | append-only; supersede, never edit. Map stack = ADR-0001; hosting/compute split (Vercel + Render, Storage disabled) = ADR-0002 |
+| Pitch · narrative · **BMC** · Q&A ownership map · interview probe sheet | [Pitch Kit](analysis/alex-pitch-kit.md) | the filled-in pitch; Alex owns. The BMC lives in §2 |
+| Pitch **method** / VC-deck-building playbook (re-weighted to the rubric) | [Pitch Deck Playbook](analysis/pitch-deck-playbook.md) | method only — the filled-in instance is the Pitch Kit |
+| Mentor guidance (Jerico + Troy), reconciled | [Mentor Synthesis](analysis/mentor-synthesis.md) | tie-broken decisions incl. the F-005 "2 routes" call |
+| Competitive analysis (ALAITAPTAP / Troy's near-twin) | [Competitive Analysis](analysis/competitive-analysis.md) | teardown + side-by-side; not copied into spec docs |
+| **Visual/brand system · design tokens · UI components · UI voice** | [Design System](design-system.md) | Helena owns; grounded in `frontend/src/styles.css`. App + pitch deck both pull from here |
 | Routing cascade / report-wizard / login-account detail | `docs/superpowers/specs/*` | teammate-owned specs — committed as of 2026-07-02, links resolve |
 
 **The rule:** a fact lives in its canonical doc; everything else links to it. Do not restate a
@@ -57,12 +62,18 @@ Data Model, QA, and Security docs mention it in one line and link there. Change 
 | Security & Compliance | [12-security-compliance.md](12-security-compliance.md) | draft | 2026-07-01 |
 | Evidence Register | [evidence-register.md](evidence-register.md) | draft | 2026-06-30 |
 | ADRs | [adr/](adr/) | ADR-0001, ADR-0002 accepted | 2026-07-02 |
+| Pitch Kit (narrative, **BMC**, 5-min script, Q&A map, probe sheet) | [analysis/alex-pitch-kit.md](analysis/alex-pitch-kit.md) | current — Alex owns | 2026-07-06 |
+| Pitch Deck Playbook (VC method → rubric) | [analysis/pitch-deck-playbook.md](analysis/pitch-deck-playbook.md) | current — method | 2026-07-06 |
+| Mentor Synthesis (Jerico + Troy) | [analysis/mentor-synthesis.md](analysis/mentor-synthesis.md) | current | 2026-07-06 |
+| Competitive Analysis (ALAITAPTAP) | [analysis/competitive-analysis.md](analysis/competitive-analysis.md) | current | 2026-07-06 |
+| Design System | [design-system.md](design-system.md) | current — Helena owns, iterate freely | 2026-07-06 |
 | Deployment Guide | [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | current | 2026-07-02 |
 | Deploy Quick Reference | [deploy.md](deploy.md) | current — condensed checklist, links back to DEPLOYMENT_GUIDE.md for rationale | 2026-07-02 |
 | Local Dev Guide | [LOCAL_DEV.md](LOCAL_DEV.md) | current | 2026-07-02 |
 
-> Not yet generated (add a row when they come online): BRD, MRD, FRD, SRS, Technical Design,
-> API Spec, Methods, Design System, Release/GTM.
+> Note: BRD ([01-brd.md](01-brd.md)), MRD ([02-mrd.md](02-mrd.md)), and Release/GTM
+> ([13-release-gtm.md](13-release-gtm.md)) also exist. Not yet generated (add a row when they come
+> online): FRD, SRS, Technical Design, API Spec, Methods.
 
 ## 2. Health check (run before calling the suite "done")
 

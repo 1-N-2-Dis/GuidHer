@@ -26,7 +26,7 @@
 - F-002 authenticated one-tap condition report → Firestore → map.
 - F-003 pre-trip per-segment route check (type + freshness).
 - F-004 (P1) Gemini dedup/structure summary, no added facts.
-- F-005 severity-tiered, multi-route (2-3 alternative) recommendation.
+- F-005 severity-tiered route recommendation — 2 routes max (safest + 1 alternative).
 - F-006 AI report classification + moderation (blocking): create/duplicate-merge/reject.
 - F-007 photo evidence on reports (upload, EXIF strip, marker + popup). **Disabled as of
   2026-07-02 (ADR-0002)** — `PHOTO_UPLOAD_ENABLED = false`; TC-023/024/025/027 are currently N/A
@@ -201,7 +201,7 @@ TC-016 (offline), TC-019 (red-segment-unavoidable), TC-022 (AI rejects spam/fals
 - **Expected:** `{ status: 'created', reportId, severity }` returned, severity ∈ {green,yellow,red};
   the new doc has `corroborationCount: 1` and `lastActivityAt == createdAt`.
 
-### TC-018 — Multi-route recommendation renders 1-3 ranked green alternatives ⭐DEMO-CRITICAL
+### TC-018 — Route recommendation renders up to 2 ranked green routes (safest + alternative) ⭐DEMO-CRITICAL
 - **Covers:** F-005
 - **Preconditions:** Live ORS access; zone has a mix of severities (or none, for the trivial case).
 - **Steps:** Set a destination that has no flagged segments nearby; then one with only yellow
@@ -323,8 +323,8 @@ TC-016 (offline), TC-019 (red-segment-unavoidable), TC-022 (AI rejects spam/fals
 
 Pulled verbatim-in-intent from PRD: F-001 (map + seeded flags, tap shows type+timestamp), F-002
 (authed report + AI review persists + appears, no crime-label field), F-003 (per-segment status,
-okay vs flagged tonight), F-004 (single dedup summary, no added facts), F-005 (1-3 ranked green
-route alternatives, red avoided unless unreachable), F-006 (exactly one of
+okay vs flagged tonight), F-004 (single dedup summary, no added facts), F-005 (up to 2 ranked green
+routes — safest + alternative, red avoided unless unreachable), F-006 (exactly one of
 created/duplicate/rejected, never an unmoderated write), F-007 (photo marker + popup, EXIF
 stripped), F-008 (`assessRoute` returns a grounded verdict, or "looks okay" with no Gemini call
 when nothing is active), F-009 (email/password or Google sign-in upgrades an anonymous session
