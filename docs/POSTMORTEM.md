@@ -59,6 +59,13 @@ SaferRoute; that is a known, tracked migration (see §4 open items), **not** a c
   Storage disabled. This protects the Technology score from a README-vs-pitch contradiction.
 - Confirmed `backend/functions/` is **already deleted** (was the old Cloud Functions code superseded
   by `backend/server/`).
+- Reconciled the **F-005 route count** in the canonical owner docs: `03-prd.md` (feature table,
+  UJ-004, acceptance) and `11-qa-test-plan.md` (scope, TC-018, acceptance) now read **2 routes max
+  (safest + 1 alternative)** instead of the stale "2–3 / 1–3". The decision itself is unchanged —
+  it was made 2026-07-01 (Troy, mentor-synthesis §4); only the PRD/QA text had drifted behind it.
+- Added the analysis docs (pitch kit, pitch-deck playbook, mentor-synthesis, competitive-analysis)
+  and a new **[Design System](./design-system.md)** (Helena-owned, grounded in `frontend/src/styles.css`)
+  to the [index.md](./index.md) source-of-truth map so they're discoverable and drift-checked.
 
 ### 2026-07-02 — Hosting/compute split (ADR-0002)
 - Frontend Firebase Hosting → **Vercel**. `submitReport`/`assessRoute`/`summarizeSegment` moved from
