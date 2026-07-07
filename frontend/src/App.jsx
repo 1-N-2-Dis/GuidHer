@@ -1,7 +1,7 @@
 // guidHER root — auth gate + shared state + routing shell.
 // Traces to: docs/06-system-design.md (React + Vite SPA architecture).
 import { useEffect, useState, useMemo } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { SEED_SEGMENTS, WELL_USED_SEGMENTS } from './data/seed-segments.js';
 import { subscribeReports, latestBySegment } from './lib/reports.js';
 import { parseRoadSegmentId } from './lib/osmRoads.js';
@@ -17,10 +17,11 @@ import SafetyTipsPage from './pages/SafetyTipsPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import AccountPage from './pages/AccountPage.jsx';
 import AdminPage from './pages/AdminPage.jsx';
+import RequireAdmin from './components/RequireAdmin.jsx';
 
 const segments = [...SEED_SEGMENTS, ...WELL_USED_SEGMENTS];
 
-function AuthenticatedApp() {
+function AuthenticatedApp({ onExitToLanding, entryPath }) {
   const [reports, setReports] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const { pathname } = useLocation();
@@ -48,7 +49,7 @@ function AuthenticatedApp() {
 
   return (
     <div className="app">
-      <AppHeader />
+      <AppHeader onBrandClick={onExitToLanding} />
       <main className={`app-main${isMapPage ? ' app-main--map' : ''}`}>
         <Routes>
           <Route path="/dashboard" element={<DashboardPage />} />
@@ -60,8 +61,12 @@ function AuthenticatedApp() {
           <Route path="/tips"      element={<SafetyTipsPage />} />
           <Route path="/profile"   element={<ProfilePage />} />
           <Route path="/login"     element={<AccountPage />} />
-          <Route path="/admin"     element={<AdminPage reports={reports} segments={allSegments} />} />
-          <Route path="/"   element={<Navigate to="/dashboard" replace />} />
+          <Route path="/admin"     element={
+            <RequireAdmin>
+              <AdminPage reports={reports} segments={allSegments} />
+            </RequireAdmin>
+          } />
+          <Route path="/"   element={<Navigate to={entryPath} replace />} />
           <Route path="*"   element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </main>
@@ -77,13 +82,25 @@ function AuthenticatedApp() {
 
 export default function App() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [entered, setEntered] = useState(!!user);
+  const [entryPath, setEntryPath] = useState('/dashboard');
 
   useEffect(() => { if (user) setEntered(true); }, [user]);
   useEffect(() => { if (!user) setEntered(false); }, [user]);
 
+  // path defaults to the dashboard; callers that want to land somewhere else (e.g. the landing
+  // page's guest map button) pass it explicitly, avoiding a race with AuthenticatedApp's own
+  // "/" redirect that a separate post-mount navigate() call would lose to.
+  function enterApp(path) { if (path) setEntryPath(path); setEntered(true); }
+  function enterProfile() { setEntered(true); navigate('/profile'); }
+  // Reset the URL back to "/" too — otherwise AuthenticatedApp's <Routes> remounts against
+  // whatever sub-route (e.g. /profile) was still showing underneath, matching that route
+  // directly on next entry instead of respecting entryPath (e.g. the guest map button).
+  function exitToLanding() { navigate('/'); setEntered(false); }
+
   if (!user || !entered) {
-    return <WelcomePage onEnter={() => setEntered(true)} />;
+    return <WelcomePage onEnter={enterApp} onEnterProfile={enterProfile} />;
   }
-  return <AuthenticatedApp />;
+  return <AuthenticatedApp onExitToLanding={exitToLanding} entryPath={entryPath} />;
 }

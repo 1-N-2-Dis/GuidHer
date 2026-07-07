@@ -8,7 +8,7 @@
 // is no such field; severity is a per-report triage signal, not a place label (BR-007).
 import { useState, useEffect } from 'react';
 import { Marker, Popup } from 'react-map-gl/maplibre';
-import { Camera } from 'lucide-react';
+import { Camera, ThumbsUp } from 'lucide-react';
 import { CONDITION_META } from '../../data/condition-types.js';
 import { SEVERITY_META } from '../../data/severity-types.js';
 import { resolvePhotoUrl, PHOTO_UPLOAD_ENABLED } from '../../lib/storage.js';
@@ -20,7 +20,7 @@ function formatTimestamp(createdAt) {
 }
 
 export default function SegmentFlag({
-  segment, report, status, isOpen, onSelect, isOnRoute = false,
+  segment, report, status, isOpen, onSelect, isOnRoute = false, isLiked, onLike
 }) {
   const flagged = status === 'flagged_tonight';
   const meta = report ? CONDITION_META[report.conditionType] : null;
@@ -56,6 +56,7 @@ export default function SegmentFlag({
       >
         <div
           className={`seg-dot seg-dot--${severity}`}
+          style={{ opacity: 0, pointerEvents: 'none' }}
           onClick={(e) => {
             e.stopPropagation();
             onSelect(segment.segmentId);
@@ -73,7 +74,6 @@ export default function SegmentFlag({
         <Popup
           longitude={segment.geo.lng}
           latitude={segment.geo.lat}
-          anchor="bottom"
           offset={12}
           closeButton
           closeOnClick={true}
@@ -89,8 +89,18 @@ export default function SegmentFlag({
                   <severityMeta.Icon size={14} /> {severityMeta.label}
                 </div>
                 <div className="muted">Reported: {formatTimestamp(report.createdAt) || '—'}</div>
-                {report.corroborationCount > 1 && (
-                  <div className="muted">Confirmed by {report.corroborationCount} reports</div>
+                {/* Baseline (seed) hotspots have no real Firestore doc to like against — hide the
+                    control rather than let it silently do nothing. */}
+                {report.id && (
+                  <div className="report-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onLike(!isLiked); }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', color: isLiked ? 'var(--sev-red-fg)' : 'var(--muted)', padding: 0, fontSize: '0.85rem' }}
+                    >
+                      <ThumbsUp size={14} fill={isLiked ? 'var(--sev-red-fg)' : 'none'} />
+                      {report.likedBy?.length > 0 ? `Liked by ${report.likedBy.length}` : 'Like'}
+                    </button>
+                  </div>
                 )}
                 {report.note ? <div className="note">"{report.note}"</div> : null}
                 {PHOTO_UPLOAD_ENABLED && report.photoPath && (

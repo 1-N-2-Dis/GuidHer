@@ -1,18 +1,13 @@
-// Severity-aware, multi-route line rendering between Point A and Point B.
-// Fetches up to 3 ranked route candidates (safest first — see src/lib/routing.js's tiered
-// cascade) and renders each as its own line, all in the same "safe" green, opacity stepped by
-// rank so the safest route reads as the recommendation and the rest as lower-emphasis
-// alternatives (not a caution color — a route only appears here at all if it's one of the
-// ranked candidates ORS could produce).
+// Severity-aware route line rendering between Point A and Point B.
+// Fetches exactly 2 route candidates — "Recommended" + "Alternative" (see src/lib/routing.js's
+// client-side WASM engine, ADR-0003), or 1 when no route exists at all — and renders each as its
+// own line, both in the same purple, with the selected route emphasized (a route only appears
+// here at all if it's one of the candidates the engine found).
 import { useEffect, useState } from 'react';
 import { Source, Layer } from 'react-map-gl/maplibre';
 import { fetchSafeRoutes } from '../../lib/routing.js';
 
-// Rank 0 (safest) drawn fully opaque; each further alternative fades out. Capped at 3 ranks —
-// fetchSafeRoutes never returns more.
-const OPACITY_BY_RANK = [0.9, 0.45, 0.25];
-
-export default function RouteLayer({ locationA, locationB, flaggedReports = [], onError, onRoutes, selectedIndex = 0 }) {
+export default function RouteLayer({ locationA, locationB, flaggedReports = [], onError, onRoutes, selectedIndex = 0, isConfirmed = false }) {
   const [routes, setRoutes] = useState(null); // Array<{ coords, status, tier }> | null
 
   useEffect(() => {
@@ -50,6 +45,13 @@ export default function RouteLayer({ locationA, locationB, flaggedReports = [], 
     <>
       {ordered.map(({ route, rank }) => {
         const isSelected = rank === selectedIndex;
+        
+        // Turn the confirmed route green, otherwise default to Google Maps blue
+        const lineColor = isConfirmed && isSelected ? '#2e7d32' : '#1A73E8';
+        
+        // Hide alternative route lines when confirmed by dropping opacity to 0
+        const lineOpacity = (isConfirmed && !isSelected) ? 0 : (isSelected ? 1.0 : 0.25);
+
         return (
           <Source
             key={route.tier}
@@ -61,9 +63,9 @@ export default function RouteLayer({ locationA, locationB, flaggedReports = [], 
               type="line"
               layout={{ 'line-join': 'round', 'line-cap': 'round' }}
               paint={{
-                'line-color': '#2e7d32',
+                'line-color': lineColor,
                 'line-width': isSelected ? 6 : 4,
-                'line-opacity': isSelected ? 1.0 : 0.25,
+                'line-opacity': lineOpacity,
               }}
             />
           </Source>

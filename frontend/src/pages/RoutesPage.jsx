@@ -67,40 +67,46 @@ function statusIcon(status) {
 function RouteCard({ route, isSaved, onSave, onViewMap }) {
   return (
     <div className={`route-card-v2${isSaved ? ' selected' : ''}`}>
-      <div className="route-card-header">
-        <div>
-          <div className="route-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {statusIcon(route.status)}
-            {route.from} → {route.to}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <div style={{ marginTop: 2, flexShrink: 0, display: 'flex' }}>
+          {statusIcon(route.status)}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="route-card-header">
+            <div className="route-name">
+              <span style={{ lineHeight: 1.1 }}>{route.from} → {route.to}</span>
+              <div className="route-score-pill" style={{ borderColor: scoreColor(route.score) }}>
+                <span className="route-score-num" style={{ color: scoreColor(route.score) }}>{route.score}</span>
+                <span className="route-score-label">safety</span>
+              </div>
+            </div>
+            <div className="route-via">{route.via}</div>
           </div>
-          <div className="route-via">{route.via}</div>
+          <div className="route-meta">
+            <span><Navigation size={13} />{route.distance}</span>
+            <span><Clock size={13} />{route.time} walk</span>
+          </div>
+          <div className="route-note">"{route.note}"</div>
+          <div className="route-card-footer">
+            <div className="route-conditions">
+              {route.conditions.map(c => (
+                <span key={c} className="route-condition-chip">{c}</span>
+              ))}
+            </div>
+            <div className="route-actions">
+              <button className="btn btn-primary btn-sm" onClick={() => onViewMap(route)}>
+                <Map size={14} /> View on Safety Map
+              </button>
+              <button
+                className={`btn btn-sm ${isSaved ? 'btn-secondary' : 'btn-outline'}`}
+                onClick={() => onSave(route)}
+              >
+                {isSaved ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
+                {isSaved ? 'Saved' : 'Save route'}
+              </button>
+            </div>
+          </div>
         </div>
-        <div className="route-score">
-          <div className="route-score-num" style={{ color: scoreColor(route.score) }}>{route.score}</div>
-          <div className="route-score-label">safety</div>
-        </div>
-      </div>
-      <div className="route-meta">
-        <span><Navigation size={13} />{route.distance}</span>
-        <span><Clock size={13} />{route.time} walk</span>
-      </div>
-      <div className="route-note">"{route.note}"</div>
-      <div className="route-conditions">
-        {route.conditions.map(c => (
-          <span key={c} className="route-condition-chip">{c}</span>
-        ))}
-      </div>
-      <div className="route-actions">
-        <button className="btn btn-primary btn-sm" onClick={() => onViewMap(route)}>
-          <Map size={14} /> View on Safety Map
-        </button>
-        <button
-          className={`btn btn-sm ${isSaved ? 'btn-secondary' : 'btn-outline'}`}
-          onClick={() => onSave(route)}
-        >
-          {isSaved ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
-          {isSaved ? 'Saved' : 'Save route'}
-        </button>
       </div>
     </div>
   );
@@ -134,31 +140,18 @@ export default function RoutesPage() {
       <div className="page-scroll-inner">
 
         {/* Header */}
-        <div className="mb-20">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
             <div style={{ paddingRight: 16 }}>
               <div className="text-h1" style={{ margin: 0, fontSize: '2.2rem', color: 'var(--ink)' }}>Routes</div>
               <div className="text-body" style={{ color: 'var(--muted)', marginTop: 8, fontSize: '1.05rem', lineHeight: 1.4 }}>Curated by Owly based on tonight's safety activity</div>
             </div>
-            <Owly size={88} pose="pointstheway" className="owly-flipped" style={{ filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.25))' }} />
+            <Owly size={88} pose="pointstheway" className="owly-flipped" />
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="route-tabs">
-          {[['recommended','Recommended'],['saved','Saved']].map(([id, label]) => (
-            <button key={id}
-              className={`route-tab${activeTab === id ? ' active' : ''}`}
-              onClick={() => setActiveTab(id)}>
-              {label} {id === 'saved' && saved.length > 0 && (
-                <span className="route-tab-count">{saved.length}</span>
-              )}
-            </button>
-          ))}
-        </div>
-
         {activeTab === 'recommended' && (
-          <div>
+          <div className="route-list">
             {RECOMMENDED.map(route => (
               <RouteCard key={route.id} route={route}
                 isSaved={isSaved(route.id)}
@@ -166,13 +159,13 @@ export default function RoutesPage() {
                 onViewMap={handleViewMap} />
             ))}
             <p style={{ fontSize: '0.78rem', color: 'var(--muted)', textAlign: 'center', marginTop: 8 }}>
-              For live routing with segment flags, use the Safety Map.
+              For live routing with road flags, use the Safety Map.
             </p>
           </div>
         )}
 
         {activeTab === 'saved' && (
-          <div>
+          <div className="route-list">
             {saved.length === 0 ? (
               <div className="empty-state">
                 <Bookmark size={40} color="var(--muted)" style={{ margin: '0 auto 12px' }} />
@@ -194,6 +187,19 @@ export default function RoutesPage() {
             )}
           </div>
         )}
+
+        {/* Tabs */}
+        <div className="route-tabs">
+          {[['recommended','Recommended'],['saved','Saved']].map(([id, label]) => (
+            <button key={id}
+              className={`route-tab${activeTab === id ? ' active' : ''}`}
+              onClick={() => setActiveTab(id)}>
+              {label} {id === 'saved' && saved.length > 0 && (
+                <span className="route-tab-count">{saved.length}</span>
+              )}
+            </button>
+          ))}
+        </div>
 
       </div>
     </div>

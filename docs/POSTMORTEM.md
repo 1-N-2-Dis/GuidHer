@@ -42,6 +42,50 @@ SaferRoute; that is a known, tracked migration (see §4 open items), **not** a c
 
 ## 3. Pivots & decisions (newest first)
 
+### 2026-07-07 (impeccable audit pass) — Emergency contacts wired up; accessibility and layout-consistency fixes across the app
+Ran the impeccable skill's `critique`/`audit` flow (static-only — no browser tool in this session,
+disclosed per the skill's own rules) across every page. Findings and fixes:
+- **Real bug, not style**: `ProfilePage.jsx`'s emergency-contacts feature had complete state/handlers/
+  CSS (`.contact-item` etc.) but no render path — added the missing UI.
+- **Real a11y bug**: `SafetyTipsPage.jsx`'s tip-category accordion header was an unfocusable
+  `<div onClick>` with no `aria-expanded` — now a proper `<button>`; hover-state JS style mutation
+  replaced with CSS.
+- **Consistency**: `AccountPage.jsx`/`AdminPage.jsx` were still on an older page-shell pattern
+  (`.report-page`, a literal "←" arrow instead of the lucide `ArrowLeft` icon AGENTS.md mandates)
+  that every other page had already moved past — brought them onto the same `.page-scroll`/
+  `GradientBlobs`/icon-button shell as `ReportPage.jsx`.
+- Removed dead CSS (`.tip-card`/`.tip-card-v2`, an unreferenced older Safety Tips design) and fixed
+  two anti-patterns the skill's deterministic scanner flagged (an accent-border-on-rounded-corner
+  clash, and a left-side accent stripe that turned out to live in that same dead CSS).
+- Minor token-consistency cleanup (dropped a couple of hardcoded colors/shadows that were silently
+  overriding existing theme tokens/classes).
+
+See [Design System §12](./design-system.md#12-change-log-design-decisions) for the full file-level
+breakdown.
+
+### 2026-07-07 — Landing page made theme-aware; dead theme code removed; dark-mode contrast fixes
+- The public landing page (`WelcomePage.jsx`'s `LandingPage`/`LandingNav`) previously stayed a
+  fixed cream/purple brand surface regardless of `data-theme`, per a deliberate earlier call
+  (design-system.md §6). That decision is now superseded: the landing page has a real dark
+  variant (`.landing`, `.landing-nav`, `.land-band-tint`/`-cream`, `.feature-card-v2`, `.eyebrow`
+  all gained `[data-theme="dark"]` overrides in `styles.css`) and `LandingNav` got its own
+  Sun/Moon toggle button (same `useTheme()` pattern as `AppHeader.jsx`), since visitors previously
+  had no way to set a theme preference before logging in. The auth screen (`.auth-screen`'s fixed
+  purple gradient) is unchanged — out of scope for this pass.
+- Fixed a real WCAG-AA contrast failure in dark mode: `SEVERITY_META` (`severity-types.js`) held
+  raw hex colors rendered inline in `SegmentFlag.jsx`'s popup; the severity-red at `#c62828` on
+  the dark `--card` background (`#2A1F45`) measured ~1.7:1, far under the 4.5:1 floor. Switched to
+  the existing dark-mode-safe var refs (`--wellused`, `--sev-yellow-fg`, `--sev-red-fg`) instead —
+  preserves the deliberate "severity green renders purple, not green" decision (§3.B), just routes
+  it through a theme-aware token instead of a hardcoded light-mode value.
+- Removed `frontend/src/context/AuthContext.jsx`: an orphaned, unused duplicate of the real theme
+  provider (`lib/theme.jsx`) that nothing imported.
+- Briefly converted the landing page's glass surfaces (`.landing-nav`, `.land-band-tint`/`-cream`,
+  `.feature-card-v2`) to the app's solid-card system, then reverted on request the same day: the
+  light-mode look stays exactly as it was (translucent-rgba + `backdrop-filter`); only their
+  `[data-theme="dark"]` companion rules are new. See
+  [Design System §5](./design-system.md#5-shape-elevation-spacing-motion).
+
 ### 2026-07-06 — Hackathon context captured; pitch built on a VC-deck method; README de-landmined
 - Added [00-hackathon-context.md](./00-hackathon-context.md) as canonical owner of the SparkFest
   rules, timeline, and **judging rubric** (Technology 25, Relevance 20, Creativity 15, Uniqueness 15,
@@ -66,6 +110,24 @@ SaferRoute; that is a known, tracked migration (see §4 open items), **not** a c
 - Added the analysis docs (pitch kit, pitch-deck playbook, mentor-synthesis, competitive-analysis)
   and a new **[Design System](./design-system.md)** (Helena-owned, grounded in `frontend/src/styles.css`)
   to the [index.md](./index.md) source-of-truth map so they're discoverable and drift-checked.
+
+### 2026-07-06 (later same day) — OpenRouteService replaced by a client-side Rust/WASM routing engine (ADR-0003)
+- Point-to-point routing (F-005) no longer calls OpenRouteService — a Rust crate compiled to
+  WebAssembly (`frontend/rust/router`) runs A* in a Web Worker (`routeWorker.js`) over a
+  preprocessed 20km pedestrian graph (`frontend/public/graph/pup-20km.bin`, built from Overpass
+  data via `scripts/fetch-graph.mjs` + `scripts/build-graph.mjs`). No external routing API, no
+  key, no quota, no cold start.
+- This is also where the "2 routes max" decision (Troy, 2026-07-01, above) actually landed in
+  code — the engine returns **exactly 2 routes** ("Recommended (safest we found)" + "Alternative"),
+  never the prior 1-3 ORS cascade. `03-prd.md`/`11-qa-test-plan.md` already read "2 routes" as of
+  the entry above; this is the implementation catching up to that already-reconciled text.
+- Resolves the previously-open "ORS key unrestricted" security item (Threat T2,
+  `docs/12-security-compliance.md`) by elimination — there is no client-side routing key anymore.
+- Verified in-browser 2026-07-06: destination selection returns exactly 2 route options with the
+  expected copy, network tab shows only the wasm module + graph asset fetched (no ORS calls, no
+  console errors), rendered route geometry follows real PUP Sta. Mesa streets.
+- See [ADR-0003](./adr/ADR-0003-client-side-wasm-routing.md) and
+  [System Design](./06-system-design.md) for the full design.
 
 ### 2026-07-02 — Hosting/compute split (ADR-0002)
 - Frontend Firebase Hosting → **Vercel**. `submitReport`/`assessRoute`/`summarizeSegment` moved from
@@ -107,7 +169,9 @@ SaferRoute; that is a known, tracked migration (see §4 open items), **not** a c
   deny-write gate or the static segments module. Diagnose, don't guess. Video fallback required.
 - **Do NOT deploy the deny-client-write Firestore rule** until `submitReport` is verified vs the
   emulator (breaks submission otherwise).
-- **ORS key is unrestricted** — restrict by origin + usage cap before any public demo.
+- ~~**ORS key is unrestricted** — restrict by origin + usage cap before any public demo.~~
+  **Resolved (2026-07-06, ADR-0003):** ORS is removed entirely — routing runs client-side
+  (Rust/WASM), no routing key exists to restrict anymore.
 - **Validation gap** — riskiest assumption (use vs group chat; will they contribute) is unproven.
   Interview probe sheet ([pitch kit §5](./analysis/alex-pitch-kit.md)) is how we test it. Judges'
   first question is "is the problem validated?"

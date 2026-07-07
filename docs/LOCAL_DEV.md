@@ -19,11 +19,47 @@ with **zero** real keys. The Maps key and Gemini key only unlock the visual map 
 
 ---
 
+## Docker quickstart (zero local setup)
+
+If you just want the whole stack running on a fresh machine, install **Docker Desktop** and run,
+from the repo root:
+
+```powershell
+docker compose up --build
+```
+
+That starts everything below — no Node, Java, or firebase-tools install needed:
+
+| URL | What |
+|-----|------|
+| http://localhost:5173 | The app (Vite dev server, hot reload on file save) |
+| http://localhost:8080 | Express API (`/health` to check) |
+| http://localhost:4000 | Firebase Emulator Suite UI (browse Auth + Firestore data) |
+| localhost:9099 / localhost:8081 | Auth / Firestore emulators (the app is pre-wired to them) |
+
+A one-shot `seed` container populates the emulators on every start: the 8 zone segments, the
+9-report heatmap baseline (`backend/data/heatmap-baseline.json`), and 3 demo accounts —
+`admin@gmail.com`, `user1@gmail.com`, `user2@gmail.com`, all with password `Passw0rd!`
+(demo-only, see `backend/scripts/seed-auth-users.mjs`).
+
+Notes:
+- **Emulator data is in-memory.** Stopping the stack wipes it; the next `up` reseeds with fresh
+  timestamps, so the baseline reports always count as "tonight" (24h freshness window).
+- Frontend and backend containers bind-mount your working tree and `npm install` on start, so
+  dependency changes need no image rebuild. Frontend hot reload works (polling); if a backend
+  edit doesn't get picked up through the mount, `docker compose restart backend`.
+- No real keys are involved: the backend talks to the emulators with no service account, and
+  Gemini features are behind `AI_FEATURES_ENABLED` (off). To try them, set `GEMINI_API_KEY` in
+  your shell before `docker compose up` and flip the flag.
+- Prefer running things directly? The manual setup below is unchanged.
+
+---
+
 ## One-time setup
 
 1. **Node 20+** — check with `node -v`. You already have it if the app built.
 
-2. **Java (JDK 11+)** — the Firestore emulator needs it. Check with `java -version`. If it is missing,
+2. **Java (JDK 21+)** — the Firestore emulator needs it. Check with `java -version`. If it is missing,
    install Temurin/Adoptium (https://adoptium.net) and reopen your terminal.
 
 3. **Firebase CLI** — install once, globally:
@@ -40,6 +76,25 @@ with **zero** real keys. The Maps key and Gemini key only unlock the visual map 
 
 Your `frontend/.env.local` is already created with `VITE_USE_EMULATORS=true` and demo values, so the
 app will talk to the emulators automatically.
+
+5. **Rust + wasm-pack — only if you're changing the routing engine.** The compiled routing graph
+   (`frontend/public/graph/pup-20km.bin`) and the wasm build output (`frontend/src/wasm/router/`)
+   are both committed to the repo (Vercel has no Rust toolchain — see
+   [ADR-0003](./adr/ADR-0003-client-side-wasm-routing.md)), so a fresh clone works with **zero**
+   Rust setup. Only install this if you're editing `frontend/rust/router` or refreshing the graph
+   data:
+   ```powershell
+   rustup target add wasm32-unknown-unknown
+   cargo install wasm-pack
+   ```
+   Then:
+   ```powershell
+   cd frontend && npm run build:wasm   # rebuild the wasm package after a Rust change
+   cd .. && npm run graph:fetch        # repo root — re-fetch OSM data via Overpass (slow, ~a few minutes)
+   npm run graph:build                 # repo root — recompile the fetched data into pup-20km.bin
+   ```
+   `cargo test` inside `frontend/rust/router` runs the engine's fixture-based unit tests (no wasm
+   toolchain needed for that — they run natively).
 
 ---
 
@@ -103,15 +158,16 @@ summary/classification; without one, everything still works via each route's cut
    GEMINI_API_KEY=your-gemini-key-here
    CORS_ORIGIN=http://localhost:5173
    ```
-   Against the local Firestore emulator, `FIREBASE_SERVICE_ACCOUNT_KEY` can be any well-formed
-   placeholder service account JSON — set `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` (see step 3) so
-   the Admin SDK talks to the emulator instead of real Firestore, no real credential needed.
+   Against the local Firestore emulator, `FIREBASE_SERVICE_ACCOUNT_KEY` can be left empty —
+   when `FIRESTORE_EMULATOR_HOST` is set (see step 3) the server skips the credential entirely
+   and talks to the emulator with just a project id (see the init branch in
+   `backend/server/index.js`).
    `GEMINI_API_KEY` is genuinely optional — a Gemini API key from
    https://aistudio.google.com/apikey unlocks the AI features.
 
 3. **Start it**, pointed at the emulator:
    ```powershell
-   $env:FIRESTORE_EMULATOR_HOST="127.0.0.1:8080"; npm run dev
+   $env:FIRESTORE_EMULATOR_HOST="127.0.0.1:8081"; npm run dev
    ```
    It listens on `http://localhost:8080` by default. Add `VITE_API_BASE_URL=http://localhost:8080`
    to `frontend/.env.local` so the app points at it.
@@ -146,14 +202,14 @@ The app reads pins from the local seed file, so skip this locally. When you depl
 cd backend
 npm install
 # against the emulator:
-$env:FIRESTORE_EMULATOR_HOST="127.0.0.1:8080"; npm run seed
+$env:FIRESTORE_EMULATOR_HOST="127.0.0.1:8081"; npm run seed
 ```
 
 ---
 
 ## Troubleshooting
 
-- **`java` not found / Firestore emulator won't start** — install JDK 11+ and reopen the terminal.
+- **`java` not found / Firestore emulator won't start** — install JDK 21+ and reopen the terminal.
 - **Port already in use** — another emulator is still running; close it, or change the port in
   `firebase.json`.
 - **Blank map / "Map unavailable"** — no `VITE_MAPS_API_KEY` yet. Expected; the side panel still works.
