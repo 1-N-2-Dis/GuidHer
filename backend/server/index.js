@@ -15,6 +15,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import PDFDocument from 'pdfkit';
 import { cert, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -483,6 +484,277 @@ app.post('/assessRoute', requireAuth, async (req, res) => {
   }
 
   res.json({ assessment, consideredCount: activeReports.length });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Analytics & Transparency routes — read-only, O(1), NO live Gemini calls.
+// All three routes read exclusively from the pre-compiled Firestore cache written
+// by backend/scripts/compile-analytics.mjs. Completely isolated from the AI path.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Shared helper: encodes a zone name to the Firestore doc ID used by compile-analytics.mjs.
+function locationToDocId(location) {
+  return location.replace(/\//g, '-').replace(/\s+/g, '_').toLowerCase();
+}
+
+// GET /api/v1/analytics/dashboard
+// Purpose: feeds the React landing page charts (vulnerability breakdown, safe haven tallies,
+// hourly trend data). Aggregates across all cached zone documents + the transparency summary
+// in a single compound read. No auth required — public, cache-controlled.
+app.get('/api/v1/analytics/dashboard', async (req, res) => {
+  try {
+    // Read both collections in parallel.
+    const [cacheSnap, statsDoc] = await Promise.all([
+      db.collection('barangay_analytics_cache').get(),
+      db.collection('platform_transparency_stats').doc('global').get(),
+    ]);
+
+    // Guard: cache not yet seeded.
+    if (cacheSnap.empty) {
+      return res.status(503).json({
+        error: 'cache_empty',
+        message: 'Analytics cache has not been compiled yet. Run backend/scripts/compile-analytics.mjs first.',
+        zones: [],
+        totals: null,
+        platform: null,
+      });
+    }
+
+    // Aggregate vulnerability counts across all zones for the top-level dashboard widgets.
+    const totals = {
+      poor_lighting_count: 0,
+      unsafe_infrastructure_count: 0,
+      low_foot_traffic_count: 0,
+      other_scams_count: 0,
+      total_weighted_reports: 0,
+    };
+
+    const zones = cacheSnap.docs.map((doc) => {
+      const d = doc.data();
+      const m = d.metrics || {};
+      totals.poor_lighting_count += m.poor_lighting_count || 0;
+      totals.unsafe_infrastructure_count += m.unsafe_infrastructure_count || 0;
+      totals.low_foot_traffic_count += m.low_foot_traffic_count || 0;
+      totals.other_scams_count += m.other_scams_count || 0;
+      totals.total_weighted_reports +=
+        (m.poor_lighting_count || 0) +
+        (m.unsafe_infrastructure_count || 0) +
+        (m.low_foot_traffic_count || 0) +
+        (m.other_scams_count || 0);
+
+      // Return the full zone shape — executive_summary intentionally included so the
+      // React dashboard can show a tooltip or expandable card per zone without a
+      // second round-trip.
+      return {
+        location: d.location,
+        last_updated: d.last_updated,
+        metrics: m,
+        executive_summary: d.ai_analysis?.executive_summary ?? null,
+      };
+    });
+
+    // Sort zones by total report weight descending so the front-end can render the
+    // top-N most active zones without a client-side sort.
+    zones.sort((a, b) => {
+      const sumA = Object.values(a.metrics).reduce((s, v) => s + (v || 0), 0);
+      const sumB = Object.values(b.metrics).reduce((s, v) => s + (v || 0), 0);
+      return sumB - sumA;
+    });
+
+    const platform = statsDoc.exists ? statsDoc.data() : null;
+
+    res.set('Cache-Control', 'public, max-age=300'); // 5-min browser cache — safe for static data
+    res.json({ zones, totals, platform });
+  } catch (err) {
+    console.error('GET /api/v1/analytics/dashboard failed:', err.message);
+    sendError(res, 'internal', 'Could not load analytics dashboard.');
+  }
+});
+
+// GET /api/v1/transparency/stats
+// Purpose: unauthenticated public endpoint showing platform data-integrity metrics so judges
+// and users can verify the dataset is real and moderated. O(1) single-document read.
+app.get('/api/v1/transparency/stats', async (req, res) => {
+  try {
+    const doc = await db.collection('platform_transparency_stats').doc('global').get();
+
+    if (!doc.exists) {
+      return res.status(503).json({
+        error: 'cache_empty',
+        message: 'Transparency stats have not been compiled yet. Run backend/scripts/compile-analytics.mjs first.',
+        stats: null,
+      });
+    }
+
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json({ stats: doc.data() });
+  } catch (err) {
+    console.error('GET /api/v1/transparency/stats failed:', err.message);
+    sendError(res, 'internal', 'Could not load transparency stats.');
+  }
+});
+
+// GET /api/v1/analytics/download-pdf?location=<zone name>
+// Purpose: streams a formatted barangay brief PDF for the given zone directly to the client.
+// Pulls exclusively from the pre-compiled barangay_analytics_cache — no live Gemini call.
+// Requires auth (requireAuth) so anonymous scraping can't drain bandwidth in production.
+app.get('/api/v1/analytics/download-pdf', requireAuth, async (req, res) => {
+  const location = typeof req.query.location === 'string' ? req.query.location.trim() : '';
+  if (!location) {
+    return sendError(res, 'invalid-argument', 'Query parameter `location` is required.');
+  }
+
+  const docId = locationToDocId(location);
+
+  let cacheDoc;
+  try {
+    cacheDoc = await db.collection('barangay_analytics_cache').doc(docId).get();
+  } catch (err) {
+    console.error('GET /api/v1/analytics/download-pdf Firestore read failed:', err.message);
+    return sendError(res, 'internal', 'Could not retrieve zone data.');
+  }
+
+  if (!cacheDoc.exists) {
+    return res.status(404).json({
+      error: 'not_found',
+      message: `No analytics cache found for location "${location}". Run compile-analytics.mjs first, or check the location name.`,
+    });
+  }
+
+  const data = cacheDoc.data();
+  const metrics = data.metrics || {};
+  const analysis = data.ai_analysis || {};
+  const mitigations = Array.isArray(analysis.actionable_mitigations) ? analysis.actionable_mitigations : [];
+  const summary = typeof analysis.executive_summary === 'string' ? analysis.executive_summary : '';
+  const lastUpdated = data.last_updated ? new Date(data.last_updated).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Unknown';
+
+  // Stream the PDF directly — no temp file on disk.
+  const filename = `GuidHer_Brief_${location.replace(/[^a-z0-9]/gi, '_')}.pdf`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+  const doc = new PDFDocument({ margin: 50, size: 'A4' });
+  doc.pipe(res);
+
+  // ── Header ────────────────────────────────────────────────────────────────
+  doc
+    .fontSize(22)
+    .font('Helvetica-Bold')
+    .text('GuidHer', { align: 'left' })
+    .fontSize(10)
+    .font('Helvetica')
+    .fillColor('#666666')
+    .text('Community Safety Infrastructure Brief', { align: 'left' })
+    .moveDown(0.3)
+    .text(`Zone: ${location}`, { align: 'left' })
+    .text(`Compiled: ${lastUpdated}`, { align: 'left' })
+    .moveDown(0.5);
+
+  // Horizontal rule
+  doc
+    .moveTo(50, doc.y)
+    .lineTo(545, doc.y)
+    .strokeColor('#cccccc')
+    .lineWidth(1)
+    .stroke()
+    .moveDown(0.8);
+
+  // ── Executive Summary ─────────────────────────────────────────────────────
+  doc
+    .fontSize(13)
+    .font('Helvetica-Bold')
+    .fillColor('#000000')
+    .text('Executive Summary')
+    .moveDown(0.4)
+    .fontSize(10)
+    .font('Helvetica')
+    .text(summary || 'No summary available. Run compile-analytics.mjs to generate AI analysis.', {
+      align: 'justify',
+      lineGap: 2,
+    })
+    .moveDown(1);
+
+  // ── Vulnerability Metrics ─────────────────────────────────────────────────
+  doc
+    .fontSize(13)
+    .font('Helvetica-Bold')
+    .text('Reported Infrastructure Vulnerability Counts')
+    .moveDown(0.5);
+
+  const metricRows = [
+    ['Poor Lighting Incidents', metrics.poor_lighting_count ?? 0],
+    ['Unsafe Infrastructure Reports', metrics.unsafe_infrastructure_count ?? 0],
+    ['Low Foot Traffic / Isolation', metrics.low_foot_traffic_count ?? 0],
+    ['Other Environmental Concerns', metrics.other_scams_count ?? 0],
+  ];
+
+  for (const [label, count] of metricRows) {
+    const barWidth = Math.min(Math.round((count / Math.max(...metricRows.map(([, c]) => c), 1)) * 200), 200);
+    doc
+      .fontSize(10)
+      .font('Helvetica')
+      .text(`${label}`, 50, doc.y, { continued: true, width: 280 })
+      .font('Helvetica-Bold')
+      .text(`${count}`, { align: 'right' })
+      .moveDown(0.15);
+    if (barWidth > 0) {
+      doc
+        .rect(50, doc.y, barWidth, 6)
+        .fillColor('#e53e3e')
+        .fill()
+        .fillColor('#000000');
+    }
+    doc.moveDown(0.6);
+  }
+
+  doc.moveDown(0.5);
+
+  // ── Actionable Mitigations ────────────────────────────────────────────────
+  doc
+    .fontSize(13)
+    .font('Helvetica-Bold')
+    .fillColor('#000000')
+    .text('Recommended Barangay Actions')
+    .moveDown(0.5);
+
+  if (mitigations.length === 0) {
+    doc
+      .fontSize(10)
+      .font('Helvetica')
+      .text('No mitigations available. Run compile-analytics.mjs with a valid GEMINI_API_KEY.');
+  } else {
+    mitigations.forEach((mitigation, i) => {
+      doc
+        .fontSize(11)
+        .font('Helvetica-Bold')
+        .text(`${i + 1}.`, 50, doc.y, { continued: true, width: 30 })
+        .fontSize(10)
+        .font('Helvetica')
+        .text(`  ${mitigation}`, { align: 'justify', lineGap: 2 })
+        .moveDown(0.6);
+    });
+  }
+
+  doc.moveDown(0.5);
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  doc
+    .moveTo(50, doc.y)
+    .lineTo(545, doc.y)
+    .strokeColor('#cccccc')
+    .lineWidth(1)
+    .stroke()
+    .moveDown(0.5)
+    .fontSize(8)
+    .fillColor('#999999')
+    .font('Helvetica')
+    .text(
+      'This brief was generated from anonymised community-sourced infrastructure reports. It describes observable, fixable conditions — not crime classifications. ' +
+      'For use in local Barangay coordination and public-service improvement requests only.',
+      { align: 'justify', lineGap: 1 },
+    );
+
+  doc.end();
 });
 
 const port = process.env.PORT || 8080;
