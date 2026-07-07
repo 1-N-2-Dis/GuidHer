@@ -10,18 +10,6 @@ import { ZONE_CENTER, getMapStyle } from '../lib/maps.js';
 import MockLocation from '../features/map/MockLocation.jsx';
 import Owly from '../components/Owly.jsx';
 
-const MOCK_FEED = [
-  { id: 1, type: 'poor_lighting', location: 'Teresa Street', time: '12 min ago', note: 'Two streetlights out near the mud path again. Stay close to the market side.', variant: 'lighting', tag: 'Lighting', helpCount: 51 },
-  { id: 2, type: 'no_crowd', location: 'Pureza Station approach', time: '38 min ago', note: 'Station underpass very empty tonight. Uncomfortable walking alone.', variant: 'crowd', tag: 'Crowd', helpCount: 34 },
-  { id: 3, type: 'recent_incident', location: 'Legarda / Estero area', time: '1 hr ago', note: 'Someone followed a rider near the south exit. Backed off near a crowd.', variant: 'incident', tag: 'Incident', helpCount: 89 },
-  { id: 4, type: 'poor_lighting', location: 'P. Campa St.', time: '2 hr ago', note: 'This detour is fully lit tonight and there\'s a tanod near the corner store. Felt safe.', variant: 'clear', tag: 'All clear', helpCount: 73 },
-];
-
-function conditionIcon(type) {
-  if (type === 'poor_lighting') return <Lightbulb size={18} />;
-  if (type === 'no_crowd') return <AlertTriangle size={18} />;
-  return <AlertOctagon size={18} />;
-}
 
 function statusBadgeClass(status) {
   if (status === 'red') return 'status-badge badge-red';
@@ -68,12 +56,12 @@ export default function DashboardPage() {
         {/* Zone overview */}
         <div className="mb-24">
           <div className="section-title mb-12">Your Location</div>
-          <div style={{ height: 200, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)' }}>
+          <div className="dashboard-map-wrapper">
             <Map
               initialViewState={{
                 longitude: ZONE_CENTER.lng,
                 latitude: ZONE_CENTER.lat,
-                zoom: 14,
+                zoom: 16.8,
               }}
               style={{ width: '100%', height: '100%' }}
               mapStyle={getMapStyle(theme)}
@@ -113,37 +101,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Activity feed */}
-        <div className="mb-32">
-          <div className="flex-between mb-12">
-            <div className="section-title">Recent community activity</div>
-            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/report')} style={{ fontSize: '0.78rem' }}>
-              View all <ArrowRight size={13} />
-            </button>
-          </div>
-          {MOCK_FEED.map(item => (
-            <div key={item.id} className="feed-item">
-              <div className={`feed-icon feed-icon-${item.variant}`}>
-                {conditionIcon(item.type)}
-              </div>
-              <div className="feed-body">
-                <div className="feed-top">
-                  <b>{item.location}</b>
-                  <span>{item.time}</span>
-                </div>
-                <p className="feed-text">{item.note}</p>
-                <div className="feed-foot">
-                  <div className="feed-tags">
-                    <span className={`feed-tag feed-tag-${item.variant}`}>{item.tag}</span>
-                  </div>
-                  <span className="text-caption" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <CheckCircle2 size={12} /> {item.helpCount} found this helpful
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+
 
       </div>
     </div>

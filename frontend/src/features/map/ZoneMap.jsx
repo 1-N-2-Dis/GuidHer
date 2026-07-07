@@ -62,6 +62,7 @@ export default function ZoneMap({ segments, latest, reports, selectedId, onSelec
   const [routeError, setRouteError] = useState(null);
   const [routes, setRoutes] = useState([]); // Array<{ coords, status, tier }>, safest first
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
+  const [isConfirmed, setIsConfirmed] = useState(false);
   const [showControls, setShowControls] = useState(false);
   const [showHeatmapRed, setShowHeatmapRed] = useState(false);
   const [showHeatmapYellow, setShowHeatmapYellow] = useState(false);
@@ -142,11 +143,13 @@ export default function ZoneMap({ segments, latest, reports, selectedId, onSelec
     setRouteError(null);
     setRoutes([]);
     setSelectedRouteIndex(0);
+    setIsConfirmed(false);
   }
 
   function handleRoutes(nextRoutes) {
     setRoutes(nextRoutes);
     setSelectedRouteIndex(0);
+    setIsConfirmed(false);
   }
 
   return (
@@ -190,6 +193,7 @@ export default function ZoneMap({ segments, latest, reports, selectedId, onSelec
             onError={setRouteError}
             onRoutes={handleRoutes}
             selectedIndex={selectedRouteIndex}
+            isConfirmed={isConfirmed}
           />
         )}
 
@@ -255,13 +259,15 @@ export default function ZoneMap({ segments, latest, reports, selectedId, onSelec
 
         {/* Route Bubble Notifications */}
         {routes.length > 0 && routes.map((route, i) => {
+          const isSelected = i === selectedRouteIndex;
+          const isHidden = isConfirmed && !isSelected;
+
           // Stagger the bubbles along the path (35% and 65%) so they don't overlap 
           // if the two routes share segments in the middle.
           const ratio = i === 0 ? 0.35 : 0.65;
           const pointIndex = Math.floor(route.coords.length * ratio);
           const placementPoint = route.coords[pointIndex]; // [lng, lat]
           const meta = STATUS_META[route.status];
-          const isSelected = i === selectedRouteIndex;
           const variantClass = i === 0 ? 'route-bubble-safest' : 'route-bubble-shortest';
 
           return (
@@ -272,25 +278,62 @@ export default function ZoneMap({ segments, latest, reports, selectedId, onSelec
               anchor="bottom" 
               onClick={(e) => { 
                 e.originalEvent.stopPropagation(); 
-                setSelectedRouteIndex(i); 
+                if (!isHidden) {
+                  setSelectedRouteIndex(i); 
+                  setIsConfirmed(false);
+                }
               }}
-              style={{ cursor: 'pointer', zIndex: isSelected ? 10 : 5 }}
+              style={{ 
+                cursor: isHidden ? 'default' : 'pointer', 
+                zIndex: isSelected ? 10 : 5, 
+                opacity: isHidden ? 0 : 1, 
+                pointerEvents: isHidden ? 'none' : 'auto',
+                transition: 'opacity 0.2s ease-in-out'
+              }}
             >
               <div className={`route-bubble ${isSelected ? 'route-bubble-selected' : ''} ${variantClass}`}>
-                <div className="route-bubble-content">
-                  {meta && (
-                    <span className="route-bubble-icon" style={{ color: isSelected ? (i === 0 ? 'var(--okay)' : '#f57f17') : 'inherit' }}>
-                      <meta.Icon size={16} />
-                    </span>
-                  )}
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                    <span className="route-bubble-title">{i === 0 ? 'Safest' : 'Shortest'}</span>
-                    {isSelected && (
-                      <span className="route-bubble-note" style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '2px', maxWidth: '120px', whiteSpace: 'normal', lineHeight: '1.2' }}>
+                <div className="route-bubble-content" style={{ padding: isSelected ? '12px' : '8px 12px', width: isSelected ? '160px' : '115px' }}>
+                  <div className="route-bubble-header" style={{ justifyContent: isSelected ? 'flex-start' : 'center' }}>
+                    {meta && <meta.Icon size={16} />}
+                    <span>{i === 0 ? 'Safest' : 'Shortest'}</span>
+                  </div>
+                  
+                  {isSelected && (
+                    <div className="route-bubble-details">
+                      <span className="route-bubble-note">
                         {routeNoteCopy(route, hazards)}
                       </span>
-                    )}
-                  </div>
+                      {isConfirmed ? (
+                        <button 
+                          className="btn btn-sm" 
+                          style={{ width: '100%', background: 'var(--surface)', color: 'var(--muted)', border: 'none', fontWeight: 600 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsConfirmed(false);
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      ) : (
+                        <button 
+                          className="btn btn-sm" 
+                          style={{ 
+                            width: '100%', 
+                            background: i === 0 ? 'var(--okay)' : '#f57f17', 
+                            color: '#fff', 
+                            border: 'none',
+                            fontWeight: 600
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsConfirmed(true);
+                          }}
+                        >
+                          Confirm
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="route-bubble-pointer"></div>
               </div>

@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { Source, Layer } from 'react-map-gl/maplibre';
 import { fetchSafeRoutes } from '../../lib/routing.js';
 
-export default function RouteLayer({ locationA, locationB, flaggedReports = [], onError, onRoutes, selectedIndex = 0 }) {
+export default function RouteLayer({ locationA, locationB, flaggedReports = [], onError, onRoutes, selectedIndex = 0, isConfirmed = false }) {
   const [routes, setRoutes] = useState(null); // Array<{ coords, status, tier }> | null
 
   useEffect(() => {
@@ -45,6 +45,13 @@ export default function RouteLayer({ locationA, locationB, flaggedReports = [], 
     <>
       {ordered.map(({ route, rank }) => {
         const isSelected = rank === selectedIndex;
+        
+        // Turn the confirmed route green, otherwise default to Google Maps blue
+        const lineColor = isConfirmed && isSelected ? '#2e7d32' : '#1A73E8';
+        
+        // Hide alternative route lines when confirmed by dropping opacity to 0
+        const lineOpacity = (isConfirmed && !isSelected) ? 0 : (isSelected ? 1.0 : 0.25);
+
         return (
           <Source
             key={route.tier}
@@ -56,9 +63,9 @@ export default function RouteLayer({ locationA, locationB, flaggedReports = [], 
               type="line"
               layout={{ 'line-join': 'round', 'line-cap': 'round' }}
               paint={{
-                'line-color': '#8b5cf6',
+                'line-color': lineColor,
                 'line-width': isSelected ? 6 : 4,
-                'line-opacity': isSelected ? 1.0 : 0.25,
+                'line-opacity': lineOpacity,
               }}
             />
           </Source>
