@@ -76,13 +76,22 @@ export default function SafetyTipsPage() {
   const [tipIdx, setTipIdx] = useState(0);
   const [activeCategory, setActiveCategory] = useState(null);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [suppressTransition, setSuppressTransition] = useState(false);
 
   function nextTip() {
     if (isAnimating) return;
     setIsAnimating(true);
     setTimeout(() => {
+      // Swap content and drop the animating class together, but with
+      // transitions off for this one frame so the cards snap straight to
+      // their new resting spots instead of reverse-animating through the
+      // old (now wrong) tip text before settling.
+      setSuppressTransition(true);
       setTipIdx(i => (i + 1) % OWLY_TIPS.length);
       setIsAnimating(false);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setSuppressTransition(false));
+      });
     }, 500); // Wait for CSS animation to finish
   }
 
@@ -97,7 +106,7 @@ export default function SafetyTipsPage() {
       <div className="page-scroll-inner">
 
         {/* Featured Owly Tip Card Deck */}
-        <div className={`featured-tip-deck-container mb-32 ${isAnimating ? 'is-animating' : ''}`}>
+        <div className={`featured-tip-deck-container mb-32 ${isAnimating ? 'is-animating' : ''} ${suppressTransition ? 'no-transition' : ''}`}>
           
           {/* Bottom Card (Next Tip Preview) */}
           <div className="featured-tip-card card-bottom" aria-hidden="true">
