@@ -1,6 +1,6 @@
 // guidHER Dashboard — cards, quick actions, zone overview, activity feed.
 import { useState, useEffect, useMemo } from 'react';
-import { CheckCircle2, AlertTriangle, AlertOctagon, Flag, Navigation, Lightbulb, ArrowRight, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, AlertOctagon, Flag, Navigation, Lightbulb, ArrowRight, ShieldCheck, MapPin } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Map from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -113,7 +113,8 @@ export default function DashboardPage({ segments = [], latest = new Map(), repor
             {/* Speech-bubble hint — inside the map frame, pointing down at the dot */}
             <div className="location-dot-bubble" aria-label="You are here. Drag the dot in the Safety Map to adjust your location.">
               <span className="location-dot-bubble-text">
-                📍 You are here — drag the dot on the Safety Map to adjust
+                <MapPin className="location-pin-icon" aria-hidden="true" />
+                You are here — drag the dot on the Safety Map to adjust
               </span>
               <span className="location-dot-bubble-tail" aria-hidden="true" />
             </div>
