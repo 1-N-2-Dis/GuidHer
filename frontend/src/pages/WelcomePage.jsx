@@ -15,6 +15,7 @@ import CursorGlow from '../components/CursorGlow.jsx';
 import LegalModal from '../components/LegalModal.jsx';
 import { TERMS_OF_SERVICE, PRIVACY_NOTICE } from '../lib/legalContent.js';
 import useRevealOnScroll from '../lib/useRevealOnScroll.js';
+import useTypewriter from '../lib/useTypewriter.js';
 
 // ── Static data ───────────────────────────────────────────────────────────────
 const CAMPUSES = ['PUP Main Campus', 'PUP Sta. Mesa', 'Other'];
@@ -502,6 +503,7 @@ function LandingPage({ onLogin, onSignup, onProfile, loggedIn, onGuest }) {
   const zonePreviewRef = useRevealOnScroll();
   const communityRef = useRevealOnScroll();
   const { theme } = useTheme();
+  const zoneTagText = useTypewriter('Sta. Mesa commute zone · PUP');
 
   const [reports, setReports] = useState([]);
   useEffect(() => subscribeReports(setReports), []);
@@ -523,7 +525,10 @@ function LandingPage({ onLogin, onSignup, onProfile, loggedIn, onGuest }) {
       {/* ── Hero ── */}
       <section className="hero-section" id="home" ref={heroRef}>
         <div className="hero-text-center fade-up">
-          <span className="eyebrow">Sta. Mesa commute zone · PUP</span>
+          <span className="eyebrow">
+            <span aria-hidden="true">{zoneTagText}</span>
+            <span className="sr-only">Sta. Mesa commute zone · PUP</span>
+          </span>
           <h1 className="hero-h1">
             Know your route.<br /><span className="accent">Own</span> your night.
           </h1>
@@ -609,30 +614,36 @@ function LandingPage({ onLogin, onSignup, onProfile, loggedIn, onGuest }) {
       <section className="land-section land-band-tint" id="supporters" ref={zonePreviewRef}>
         <div className="land-section-inner text-center">
           <div className="land-section-head">
+            <span className="land-tag">Our safety network</span>
             <h2 className="land-h2">Supported by these organizations and community</h2>
             <p className="land-lead">Working together to build a safer commute for every student in the Sta. Mesa zone.</p>
           </div>
-          <div className="supporters-grid">
-            <div className="supporter-logo">
-              <img src="/bahaghari.png" alt="Bahaghari PUP logo" className="supporter-img" />
-            </div>
-            <div className="supporter-logo">
-              <img src="/angat-iskolar.png" alt="Angat Iskolar PUP logo" className="supporter-img" />
-            </div>
-            <div className="supporter-logo">
-              <img src="/pup-codi.png" alt="PUP CODI logo" className="supporter-img" />
-            </div>
+          <div className="partners-track">
+            {[
+              { src: '/bahaghari.png', alt: 'Bahaghari PUP logo', name: 'Bahaghari PUP' },
+              { src: '/angat-iskolar.png', alt: 'Angat Iskolar PUP logo', name: 'Angat Iskolar PUP' },
+              { src: '/pup-codi.png', alt: 'PUP CODI logo', name: 'PUP CODI' },
+            ].map(({ src, alt, name }) => (
+              <div className="partner-stop" key={name}>
+                <span className="partner-waypoint" />
+                <div className="partner-badge">
+                  <img src={src} alt={alt} className="partner-logo-img" />
+                </div>
+                <span className="partner-name">{name}</span>
+              </div>
+            ))}
           </div>
         </div>
-        
+
         {/* ── Community CTA ── */}
         <div className="land-section-inner" id="community" ref={communityRef} style={{ marginTop: 160 }}>
           <div className="cta-banner">
             <div>
+              <span className="cta-tag">Community</span>
               <h3>Built by students navigating this exact commute, for the next one behind them.</h3>
               <p>Join GuidHer. Your reports become someone else's peace of mind on the walk home.</p>
               <div className="cta-actions">
-                <button className="btn btn-gold" onClick={onSignup}>
+                <button className="btn btn-lg btn-gold" onClick={onSignup}>
                   <Users size={16} /> Join the community
                 </button>
                 <button className="btn btn-cta-ghost" onClick={onLogin}>
